@@ -148,3 +148,93 @@ tests/fixtures/         ✅ 6 Reddit JSON fixtures
 - components/NodeDetail.tsx — slide-out panel with sanitized comment text
 - components/UrlInput.tsx — URL input with loading states, error display
 - Client-side Reddit fetch hook (browser → Reddit .json → POST to /api/thread)
+
+---
+
+## 2026-03-27 — Week 1 Day 3: Web Worker + UI Components + CI
+
+### Done
+- `workers/forceLayout.worker.ts`: D3 force simulation in Web Worker
+  - INIT/FILTER/STOP inbound messages, TICK/STABILIZED/ERROR outbound
+  - Float32Array transferable positions for >200 nodes, JSON for smaller sets
+  - Tick throttling (every 3rd tick broadcast), alpha-based convergence
+  - Edge validation (unknown node IDs silently filtered)
+  - Worker-specific type declarations (`workers/worker-env.d.ts`)
+- `components/ControlPanel.tsx`: Left-side control panel
+  - Depth slider (0 to maxAvailableDepth), score threshold slider (-100 to 1000)
+  - Color-blind-safe sentiment legend (blue/gray/orange)
+  - Node count summary (visible / total)
+  - Accessible: ARIA labels, focus-visible rings, keyboard-navigable sliders
+- `components/NodeDetail.tsx`: Right-side slide-out detail panel
+  - Author, score (or "hidden"), depth, sentiment label with color
+  - Sanitized HTML rendering (bodyHtml pre-sanitized server-side)
+  - Stub node display ("N more comments" / "Continue on Reddit")
+  - Permalink to original Reddit comment
+  - Focus trap: Tab cycles within panel, Escape closes
+  - CSS transition for slide-in/out animation
+- `.github/workflows/ci.yml`: CI pipeline
+  - lint → type-check → unit/integration tests → build
+  - Node 20, npm cache, 10-min timeout
+  - Mock Redis env vars for test isolation
+- Component and Worker CSS added to `globals.css`
+- Installed d3-force, d3-quadtree, @testing-library/react, jsdom
+- Test count: 95 → 126
+
+### Week 1 Definition of Done Status
+- [x] Day 1 benchmark completed and sanitization strategy documented
+- [ ] Web Worker bundling verified on Vercel deployment (need to deploy)
+- [x] `curl /api/thread?url=<reddit_url>` returns valid ThreadData JSON
+- [x] `curl /api/health` returns Redis ping status
+- [x] Cache hit on repeated request within 15 minutes
+- [x] 11th request from same IP returns 429
+- [x] Non-Reddit URL returns 400
+- [x] Comment permalink URL returns full thread data
+- [x] All unit tests pass (126 passing)
+- [x] Web Worker skeleton compiles and responds to INIT message with mock positions
+- [ ] ControlPanel and NodeDetail render against mock data on preview deployment
+
+### Git State
+- Branch: feature/week1-day2-data-pipeline (continuing)
+- 126 tests passing, type-check clean, lint clean (1 pre-existing warning)
+
+### What's Built So Far
+```
+lib/
+  types.ts              ✅ All core types
+  errors.ts             ✅ Error classes with HTTP status mapping
+  redis.ts              ✅ Singleton client with failure detection
+  cache.ts              ✅ Upstash 15-min TTL
+  rateLimiter.ts        ✅ Sliding window via @upstash/ratelimit
+  sentiment.ts          ✅ AFINN scoring with preprocessing
+  afinn.ts              ✅ AFINN-165 word list
+  sanitize.ts           ✅ sanitize-html with entity decoding
+  dataSource.ts         ✅ DataSource interface
+  redditParser.ts       ✅ Full Reddit JSON parser
+  redditJsonDataSource.ts ✅ DataSource impl
+  graphUtils.ts         ❌ Not yet (Week 2)
+app/
+  page.tsx              ✅ Placeholder
+  layout.tsx            ✅ Dark mode, Geist fonts
+  globals.css           ✅ Theme + component styles
+  api/health/route.ts   ✅ Redis status (auth-gated details)
+  api/thread/route.ts   ✅ Two-phase API
+components/
+  ControlPanel.tsx      ✅ Depth slider, score filter, legend
+  NodeDetail.tsx        ✅ Slide-out panel, focus trap
+  UrlInput.tsx          ❌ Not yet (Week 2)
+  ThreadGraph.tsx       ❌ Not yet (Week 2)
+workers/
+  forceLayout.worker.ts ✅ D3 force simulation off-main-thread
+styles/theme.css        ✅ Dark mode, color-blind-safe palette
+.github/workflows/ci.yml ✅ Lint, type-check, test, build
+tests/                  ✅ 126 tests across 12 files
+tests/fixtures/         ✅ 6 Reddit JSON fixtures
+```
+
+### Next (Day 4+)
+- Verify Reddit CORS from real browser (go/no-go gate)
+- components/UrlInput.tsx — URL input with validation, loading states, error display
+- lib/graphUtils.ts — nodeRadius, findNodeAtPoint, coordinate transforms
+- components/ThreadGraph.tsx — Canvas rendering (Week 2 primary focus)
+- app/page.tsx — state orchestration, component composition
+- Client-side Reddit fetch hook
