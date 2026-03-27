@@ -1,0 +1,17 @@
+# Planning and documentation (not needed in deployment)
+docs/
+BUILD_PLAN_*.md
+build_log.md
+CHANGELOG.md
+CLAUDE.md
+
+# Tests
+tests/
+*.test.ts
+*.spec.ts
+playwright.config.ts
+vitest.config.ts
+
+# Dev config
+.env.example
+.github/

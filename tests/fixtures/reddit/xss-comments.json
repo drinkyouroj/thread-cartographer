@@ -1,0 +1,131 @@
+[
+  {
+    "kind": "Listing",
+    "data": {
+      "after": null,
+      "dist": 1,
+      "modhash": "",
+      "geo_filter": "",
+      "children": [
+        {
+          "kind": "t3",
+          "data": {
+            "subreddit": "test",
+            "id": "xssthread",
+            "author": "test_user",
+            "title": "XSS test thread",
+            "selftext": "Testing XSS vectors",
+            "selftext_html": "&lt;div class=\"md\"&gt;&lt;p&gt;Testing XSS vectors&lt;/p&gt;&lt;/div&gt;",
+            "score": 1,
+            "num_comments": 4,
+            "created_utc": 1711500000,
+            "permalink": "/r/test/comments/xssthread/xss_test_thread/",
+            "name": "t3_xssthread",
+            "is_self": true,
+            "url": "https://www.reddit.com/r/test/comments/xssthread/xss_test_thread/",
+            "edited": false,
+            "score_hidden": false,
+            "contest_mode": false
+          }
+        }
+      ],
+      "before": null
+    }
+  },
+  {
+    "kind": "Listing",
+    "data": {
+      "after": null,
+      "dist": null,
+      "modhash": "",
+      "geo_filter": "",
+      "children": [
+        {
+          "kind": "t1",
+          "data": {
+            "subreddit": "test",
+            "id": "xss000",
+            "author": "xss_tester_0",
+            "body": "XSS test vector 0",
+            "body_html": "&lt;script&gt;alert('xss')&lt;/script&gt;",
+            "score": 1,
+            "score_hidden": false,
+            "parent_id": "t3_xssthread",
+            "permalink": "/r/test/comments/xssthread/xss_test/xss000/",
+            "created_utc": 1711500000,
+            "edited": false,
+            "depth": 0,
+            "replies": "",
+            "name": "t1_xss000",
+            "is_submitter": false,
+            "controversiality": 0
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "subreddit": "test",
+            "id": "xss001",
+            "author": "xss_tester_1",
+            "body": "XSS test vector 1",
+            "body_html": "&lt;img src=x onerror=alert('xss')&gt;",
+            "score": 1,
+            "score_hidden": false,
+            "parent_id": "t3_xssthread",
+            "permalink": "/r/test/comments/xssthread/xss_test/xss001/",
+            "created_utc": 1711500001,
+            "edited": false,
+            "depth": 0,
+            "replies": "",
+            "name": "t1_xss001",
+            "is_submitter": false,
+            "controversiality": 0
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "subreddit": "test",
+            "id": "xss002",
+            "author": "xss_tester_2",
+            "body": "XSS test vector 2",
+            "body_html": "&lt;a href=\"javascript:alert('xss')\"&gt;click me&lt;/a&gt;",
+            "score": 1,
+            "score_hidden": false,
+            "parent_id": "t3_xssthread",
+            "permalink": "/r/test/comments/xssthread/xss_test/xss002/",
+            "created_utc": 1711500002,
+            "edited": false,
+            "depth": 0,
+            "replies": "",
+            "name": "t1_xss002",
+            "is_submitter": false,
+            "controversiality": 0
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "subreddit": "test",
+            "id": "xss003",
+            "author": "xss_tester_3",
+            "body": "XSS test vector 3",
+            "body_html": "&lt;div onmouseover=\"alert('xss')\"&gt;hover me&lt;/div&gt;",
+            "score": 1,
+            "score_hidden": false,
+            "parent_id": "t3_xssthread",
+            "permalink": "/r/test/comments/xssthread/xss_test/xss003/",
+            "created_utc": 1711500003,
+            "edited": false,
+            "depth": 0,
+            "replies": "",
+            "name": "t1_xss003",
+            "is_submitter": false,
+            "controversiality": 0
+          }
+        }
+      ],
+      "before": null
+    }
+  }
+]
