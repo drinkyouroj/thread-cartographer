@@ -52,13 +52,13 @@ export async function GET() {
     results.sanitizeSource = "live";
   }
 
-  // Step 2: DOMPurify benchmark
+  // Step 2: sanitize-html benchmark (replaced DOMPurify after jsdom crash)
   try {
     const { sanitizeHtml } = await import("@/lib/sanitize");
     const count = Math.min(commentBodies.length, 100);
     const sanitizeStart = performance.now();
     for (let i = 0; i < count; i++) {
-      await sanitizeHtml(commentBodies[i]);
+      sanitizeHtml(commentBodies[i]);
     }
     const sanitizeMs = performance.now() - sanitizeStart;
     results.sanitizeMs = Math.round(sanitizeMs);

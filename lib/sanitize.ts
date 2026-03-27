@@ -1,7 +1,9 @@
 // HTML sanitization for Reddit comment body_html
-// Uses DOMPurify with an allowlist of safe tags/attributes
-// Note: sanitization strategy (server vs client) determined by Day 1 benchmark
-// This module provides the server-side implementation
+// Uses sanitize-html (pure JS, no jsdom dependency)
+// Switched from isomorphic-dompurify after Day 1 benchmark:
+//   jsdom has ESM/CJS incompatibility on Vercel serverless runtime
+
+import sanitize from "sanitize-html";
 
 // Reddit double-encodes HTML entities in body_html.
 // The JSON parser handles one level, but we need to decode one more.
@@ -25,7 +27,7 @@ export function decodeHtmlEntities(html: string): string {
   );
 }
 
-// Allowlisted tags and attributes for DOMPurify
+// Allowlisted tags and attributes
 const ALLOWED_TAGS = [
   "a", "b", "blockquote", "br", "code", "del", "em", "h1", "h2", "h3",
   "h4", "h5", "h6", "hr", "i", "li", "ol", "p", "pre", "s", "span",
@@ -33,43 +35,31 @@ const ALLOWED_TAGS = [
   "ul",
 ];
 
-const ALLOWED_ATTR = ["href", "title"];
-
-// Lazy-load DOMPurify to avoid jsdom overhead on every import
-let purify: ((html: string) => string) | null = null;
-
-async function getPurify(): Promise<(html: string) => string> {
-  if (purify) return purify;
-
-  // Dynamic import to keep jsdom out of the critical path
-  const DOMPurify = (await import("isomorphic-dompurify")).default;
-  purify = (html: string) =>
-    DOMPurify.sanitize(html, {
-      ALLOWED_TAGS,
-      ALLOWED_ATTR,
-      ALLOW_DATA_ATTR: false,
-    });
-
-  return purify;
-}
+const SANITIZE_OPTIONS: sanitize.IOptions = {
+  allowedTags: ALLOWED_TAGS,
+  allowedAttributes: {
+    a: ["href", "title"],
+  },
+  allowedSchemes: ["http", "https", "mailto"],
+  disallowedTagsMode: "discard",
+};
 
 /**
  * Sanitize Reddit comment HTML.
  * 1. Decode double-encoded HTML entities
- * 2. Run through DOMPurify with allowlisted tags
+ * 2. Run through sanitize-html with allowlisted tags
  *
  * Pass `skipSanitize: true` to only decode entities (for client-side sanitization strategy).
  */
-export async function sanitizeHtml(
+export function sanitizeHtml(
   html: string,
   options?: { skipSanitize?: boolean }
-): Promise<string> {
+): string {
   const decoded = decodeHtmlEntities(html);
 
   if (options?.skipSanitize) {
     return decoded;
   }
 
-  const sanitize = await getPurify();
-  return sanitize(decoded);
+  return sanitize(decoded, SANITIZE_OPTIONS);
 }
