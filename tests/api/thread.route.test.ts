@@ -60,7 +60,21 @@ describe("GET /api/thread", () => {
     const data = await res.json();
     expect(data.data).toBeNull();
     expect(data.meta.cached).toBe(false);
+    expect(data.meta.fetchUrl).toBeDefined();
     expect(res.headers.get("X-Cache")).toBe("MISS");
+  });
+
+  it("returns normalized fetchUrl stripping comment permalink (Gotcha #10)", async () => {
+    const res = await GET(
+      makeGetRequest(
+        "https://www.reddit.com/r/test/comments/abc123/title/def456/"
+      )
+    );
+    const data = await res.json();
+    // fetchUrl should point to the full thread, not the comment subtree
+    expect(data.meta.fetchUrl).toBe(
+      "https://www.reddit.com/r/test/comments/abc123.json"
+    );
   });
 });
 
@@ -172,5 +186,20 @@ describe("POST /api/thread", () => {
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.error).toBe("INVALID_BODY");
+  });
+
+  it("returns 413 for oversized request body", async () => {
+    const req = new NextRequest("http://localhost:3000/api/thread", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "content-length": String(10 * 1024 * 1024), // 10MB
+      },
+      body: JSON.stringify({ url: "https://www.reddit.com/r/test/comments/abc123/", redditData: {} }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(413);
+    const data = await res.json();
+    expect(data.error).toBe("PAYLOAD_TOO_LARGE");
   });
 });

@@ -181,7 +181,7 @@ describe("parseRedditResponse", () => {
       (n) => !n.isStub && n.sentiment !== 0
     );
     // Not all comments will have sentiment words, but some should
-    expect(withSentiment.length).toBeGreaterThanOrEqual(0);
+    expect(withSentiment.length).toBeGreaterThan(0);
 
     // All sentiment values should be in [-1, 1]
     for (const node of result.nodes) {

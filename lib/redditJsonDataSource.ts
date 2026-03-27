@@ -67,8 +67,8 @@ export class RedditJsonDataSource implements DataSource {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const postData = (rawJson as any)[0]?.data?.children?.[0]?.data;
-    const dataThreadId = postData?.id;
-    if (dataThreadId && dataThreadId !== threadId) {
+    const dataThreadId = postData?.id ?? (postData?.name?.replace(/^t3_/, "") || "");
+    if (!dataThreadId || dataThreadId !== threadId) {
       throw new ValidationError(
         "Submitted data does not match the claimed URL",
         "DATA_URL_MISMATCH"

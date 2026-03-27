@@ -10,6 +10,7 @@ import { RedditJsonDataSource } from "@/lib/redditJsonDataSource";
 import { checkLimit } from "@/lib/rateLimiter";
 import { extractThreadId } from "@/lib/cache";
 import { isDegraded } from "@/lib/redis";
+import { normalizeRedditUrl } from "@/lib/redditParser";
 import { AppError, ValidationError, RateLimitError } from "@/lib/errors";
 
 const dataSource = new RedditJsonDataSource();
@@ -82,9 +83,13 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // Return normalized URL so client fetches the full thread (not a comment subtree)
+  const normalizedUrl = normalizeRedditUrl(url);
+  const fetchUrl = `${normalizedUrl}.json`;
+
   logRequest("cache_miss", { threadId, duration });
   return NextResponse.json(
-    { data: null, meta: { cached: false, threadId } },
+    { data: null, meta: { cached: false, threadId, fetchUrl } },
     { status: 404, headers: { "X-Cache": "MISS" } }
   );
 }
@@ -108,6 +113,15 @@ export async function POST(request: NextRequest) {
       status: resp.status,
       headers: { "Retry-After": String(rateResult.retryAfter) },
     });
+  }
+
+  // Check body size (Vercel Hobby limit: 4.5MB; we cap at 5MB)
+  const contentLength = parseInt(request.headers.get("content-length") ?? "0", 10);
+  if (contentLength > 5 * 1024 * 1024) {
+    return NextResponse.json(
+      { error: "PAYLOAD_TOO_LARGE", message: "Request body exceeds 5 MB limit." },
+      { status: 413 }
+    );
   }
 
   // Parse request body

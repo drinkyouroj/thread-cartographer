@@ -3,9 +3,10 @@
 
 import type { CommentNode, ThreadEdge, ThreadData } from "./types";
 import { scoreSentiment } from "./sentiment";
-import { sanitizeHtml, decodeHtmlEntities } from "./sanitize";
+import { sanitizeHtml } from "./sanitize";
 
 const MAX_COMMENT_NODES = 500;
+const MAX_RECURSION_DEPTH = 100;
 
 /** Strip t1_/t3_ prefix from Reddit IDs (Gotcha #2) */
 function stripIdPrefix(id: string): string {
@@ -59,12 +60,6 @@ export function validateRedditJson(data: unknown): string | null {
   return null;
 }
 
-interface ParseResult {
-  nodes: CommentNode[];
-  edges: ThreadEdge[];
-  isTruncated: boolean;
-}
-
 /**
  * Recursively walk the Reddit comment tree and collect nodes + edges.
  * Stops collecting after MAX_COMMENT_NODES.
@@ -78,6 +73,8 @@ function walkComments(
   maxDepthIfTruncating: number,
   isTruncating: boolean,
 ): void {
+  if (depth > MAX_RECURSION_DEPTH) return;
+
   for (const child of children) {
     if (nodes.length >= MAX_COMMENT_NODES) return;
 
@@ -191,7 +188,8 @@ function walkComments(
 /**
  * Count total comments in the raw Reddit response (for truncation decision).
  */
-function countRawComments(children: Array<Record<string, unknown>>): number {
+function countRawComments(children: Array<Record<string, unknown>>, depth = 0): number {
+  if (depth > MAX_RECURSION_DEPTH) return 0;
   let count = 0;
   for (const child of children) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -202,7 +200,7 @@ function countRawComments(children: Array<Record<string, unknown>>): number {
       if (d.replies && typeof d.replies === "object") {
         const replyChildren = d.replies?.data?.children;
         if (Array.isArray(replyChildren)) {
-          count += countRawComments(replyChildren);
+          count += countRawComments(replyChildren, depth + 1);
         }
       }
     }
@@ -262,7 +260,7 @@ export function parseRedditResponse(
     1, // comments start at depth 1
     nodes,
     edges,
-    isTruncating ? 2 : Infinity, // if truncating, allow top-level + 2 levels
+    isTruncating ? 3 : Infinity, // if truncating, allow top-level + 2 levels (depth 1, 2, 3)
     isTruncating,
   );
 
