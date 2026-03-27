@@ -45,9 +45,15 @@ export function scoreSentiment(text: string): number {
   let rawScore = 0;
   for (const word of words) {
     if (word in afinn) {
-      rawScore += afinn[word];
+      const val = afinn[word];
+      if (typeof val === "number" && !isNaN(val)) {
+        rawScore += val;
+      }
     }
   }
+
+  // Guard against NaN propagation
+  if (isNaN(rawScore)) return 0;
 
   // Normalize: score / (|score| + 5) — dampens short-comment dominance
   return rawScore / (Math.abs(rawScore) + 5);
