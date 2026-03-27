@@ -1,0 +1,38 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# testing
+coverage/
+
+# next.js
+.next/
+out/
+
+# production
+build/
+dist/
+
+# env files
+.env
+.env*.local
+
+# vercel
+.vercel
+
+# misc
+.DS_Store
+*.tgz
+*.log
+npm-debug.log*
+
+# editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# playwright
+test-results/
+playwright-report/
