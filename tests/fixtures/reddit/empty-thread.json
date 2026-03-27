@@ -1,0 +1,46 @@
+[
+  {
+    "kind": "Listing",
+    "data": {
+      "after": null,
+      "dist": 1,
+      "modhash": "",
+      "geo_filter": "",
+      "children": [
+        {
+          "kind": "t3",
+          "data": {
+            "subreddit": "test",
+            "id": "empty01",
+            "author": "test_user",
+            "title": "Empty thread for testing",
+            "selftext": "This thread has no comments.",
+            "selftext_html": "&lt;!-- SC_OFF --&gt;&lt;div class=\"md\"&gt;&lt;p&gt;This thread has no comments.&lt;/p&gt;&lt;/div&gt;&lt;!-- SC_ON --&gt;",
+            "score": 1,
+            "num_comments": 0,
+            "created_utc": 1711500000,
+            "permalink": "/r/test/comments/empty01/empty_thread_for_testing/",
+            "name": "t3_empty01",
+            "is_self": true,
+            "url": "https://www.reddit.com/r/test/comments/empty01/empty_thread_for_testing/",
+            "edited": false,
+            "score_hidden": false,
+            "contest_mode": false
+          }
+        }
+      ],
+      "before": null
+    }
+  },
+  {
+    "kind": "Listing",
+    "data": {
+      "after": null,
+      "dist": null,
+      "modhash": "",
+      "geo_filter": "",
+      "children": [],
+      "before": null
+    }
+  }
+]

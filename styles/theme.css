@@ -1,0 +1,58 @@
+/* Thread Cartographer — Dark mode theme
+   Color-blind-safe sentiment palette: blue (positive), gray (neutral), orange (negative)
+   Per PRD: dark background with light nodes as default */
+
+:root {
+  /* Background */
+  --bg-primary: #0f0f12;
+  --bg-secondary: #1a1a22;
+  --bg-tertiary: #24242e;
+  --bg-canvas: #0a0a0e;
+
+  /* Text */
+  --text-primary: #e8e8ed;
+  --text-secondary: #9898a6;
+  --text-muted: #5c5c6e;
+
+  /* Borders */
+  --border-primary: #2a2a36;
+  --border-hover: #3a3a4a;
+
+  /* Sentiment colors — color-blind-safe (no red/green) */
+  --sentiment-positive: #4a9eff;
+  --sentiment-neutral: #7a7a8a;
+  --sentiment-negative: #e87830;
+
+  /* Sentiment colors for Canvas (slightly brighter for dark background contrast) */
+  --sentiment-positive-node: #5aadff;
+  --sentiment-neutral-node: #8a8a9a;
+  --sentiment-negative-node: #f08840;
+
+  /* Edge color */
+  --edge-color: rgba(120, 120, 140, 0.3);
+  --edge-hover-color: rgba(180, 180, 200, 0.6);
+
+  /* Node sizing */
+  --node-min-radius: 4;
+  --node-max-radius: 20;
+  --node-default-radius: 8;
+
+  /* UI accent */
+  --accent: #4a9eff;
+  --accent-hover: #3a8eef;
+  --error: #e85050;
+  --warning: #e8a830;
+
+  /* Panels */
+  --panel-bg: #16161e;
+  --panel-border: #2a2a36;
+  --panel-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+
+  /* Controls */
+  --slider-track: #2a2a36;
+  --slider-thumb: #4a9eff;
+  --slider-active-track: #4a9eff;
+
+  /* Focus ring for accessibility */
+  --focus-ring: 0 0 0 2px var(--accent);
+}
