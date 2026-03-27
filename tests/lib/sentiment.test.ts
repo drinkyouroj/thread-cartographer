@@ -53,6 +53,18 @@ describe("scoreSentiment", () => {
     const plain = scoreSentiment("great");
     expect(link).toBe(plain);
   });
+
+  it("strips multi-line fenced code blocks", () => {
+    const withCode = scoreSentiment("good\n```\nterrible awful bad\n```\ngood");
+    const withoutCode = scoreSentiment("good\n\ngood");
+    expect(withCode).toBe(withoutCode);
+  });
+
+  it("strips inline code", () => {
+    const withCode = scoreSentiment("the `terrible` variable");
+    const withoutCode = scoreSentiment("the  variable");
+    expect(withCode).toBe(withoutCode);
+  });
 });
 
 describe("classifySentiment", () => {

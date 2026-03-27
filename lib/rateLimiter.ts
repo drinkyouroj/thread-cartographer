@@ -11,13 +11,21 @@ export interface RateLimitResult {
 }
 
 let limiter: Ratelimit | null = null;
+let limiterDegraded = false;
 
 function getLimiter(): Ratelimit | null {
+  // Reset cached limiter if Redis recovered from degraded state
+  if (limiter && limiterDegraded && !isDegraded()) {
+    limiter = null;
+    limiterDegraded = false;
+  }
+
   if (limiter) return limiter;
 
   const client = redis();
   if (!client) return null;
 
+  limiterDegraded = isDegraded();
   limiter = new Ratelimit({
     redis: client,
     limiter: Ratelimit.slidingWindow(10, "60 s"),

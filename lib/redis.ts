@@ -1,5 +1,13 @@
 // Singleton Upstash Redis client with failure detection
 // Per DECISION-002 Required Change #6: failure counter + isDegraded()
+//
+// SERVERLESS NOTE: Module-level state (consecutiveFailures, degraded) is
+// per-instance and resets on cold starts. On Vercel serverless, warm instances
+// may share state across requests but cold starts reset everything. This means
+// the degraded flag is approximate — it protects within a single instance's
+// lifetime but is not globally consistent across all function instances.
+// This is acceptable for Phase 1: the flag prevents a single instance from
+// hammering a dead Redis, which is the primary failure mode.
 
 import { Redis } from "@upstash/redis";
 

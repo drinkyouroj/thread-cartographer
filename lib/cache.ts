@@ -8,7 +8,9 @@ import { redis, recordSuccess, recordFailure, isDegraded } from "./redis";
 const CACHE_TTL_SECONDS = 15 * 60; // 15 minutes
 const KEY_PREFIX = "tc:cache:thread:";
 
-// In-memory counters (reset on cold start)
+// In-memory counters — per-instance and approximate in serverless.
+// Each Vercel function instance maintains its own counters; cold starts reset them.
+// Use for directional monitoring, not precise accounting.
 let hits = 0;
 let misses = 0;
 

@@ -26,7 +26,8 @@ function preprocess(text: string): string {
   cleaned = cleaned.replace(/\*\*\*(.*?)\*\*\*/g, "$1"); // bold italic
   cleaned = cleaned.replace(/\*\*(.*?)\*\*/g, "$1"); // bold
   cleaned = cleaned.replace(/\*(.*?)\*/g, "$1"); // italic
-  cleaned = cleaned.replace(/`{1,3}[^`]*`{1,3}/g, ""); // inline code / code blocks
+  cleaned = cleaned.replace(/```[\s\S]*?```/g, ""); // fenced code blocks (multi-line)
+  cleaned = cleaned.replace(/`[^`]*`/g, ""); // inline code
 
   return cleaned;
 }
