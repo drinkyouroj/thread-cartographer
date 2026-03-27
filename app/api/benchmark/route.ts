@@ -12,25 +12,35 @@ export async function GET() {
   const results: Record<string, unknown> = {};
   const overallStart = performance.now();
 
-  // Step 1: Fetch Reddit .json
+  // Step 1: Fetch Reddit .json — try multiple URLs in case some are blocked
+  const fetchUrls = [
+    "https://www.reddit.com/r/programming/comments/1qoxwdt/.json?limit=100",
+    "https://www.reddit.com/r/webdev/hot.json?limit=5",
+    "https://www.reddit.com/r/AskReddit/comments/t0ynr/.json?limit=200",
+  ];
+
   const fetchStart = performance.now();
   let commentBodies: string[] = [];
-  try {
-    const resp = await fetch(
-      "https://www.reddit.com/r/AskReddit/comments/t0ynr/.json?limit=200",
-      {
+  let fetchSucceeded = false;
+
+  for (const url of fetchUrls) {
+    try {
+      const resp = await fetch(url, {
         headers: { "User-Agent": "ThreadCartographer/1.0 (benchmark)" },
-      }
-    );
-    if (!resp.ok) {
-      results.fetchError = `Reddit returned ${resp.status}`;
-    } else {
+      });
+      results[`fetch_${url.split("/comments/")[1]?.split("/")[0] ?? "hot"}_status`] = resp.status;
+
+      if (!resp.ok) continue;
+
       const data = await resp.json();
       const fetchEnd = performance.now();
       results.fetchMs = Math.round(fetchEnd - fetchStart);
+      results.fetchUrl = url;
+      fetchSucceeded = true;
 
-      // Extract comment body_html strings
-      const comments = data[1]?.data?.children ?? [];
+      // Extract comment body_html strings (handle both thread and listing formats)
+      const commentListing = Array.isArray(data) ? data[1] : data;
+      const comments = commentListing?.data?.children ?? [];
       function extractBodies(children: Array<Record<string, unknown>>) {
         for (const child of children) {
           const d = child.data as Record<string, unknown> | undefined;
@@ -49,30 +59,41 @@ export async function GET() {
       }
       extractBodies(comments);
       results.commentsExtracted = commentBodies.length;
+      break;
+    } catch (err) {
+      results.fetchError = err instanceof Error ? err.message : String(err);
     }
-  } catch (err) {
-    results.fetchError = err instanceof Error ? err.message : String(err);
   }
 
-  // Step 2: Sanitize comments with DOMPurify
-  if (commentBodies.length > 0) {
-    const target = Math.min(commentBodies.length, 100);
-    const sanitizeStart = performance.now();
-    for (let i = 0; i < target; i++) {
-      await sanitizeHtml(commentBodies[i]);
-    }
-    const sanitizeEnd = performance.now();
-    results.sanitizeMs = Math.round(sanitizeEnd - sanitizeStart);
-    results.sanitizeCount = target;
-    results.sanitizeMsPerComment = Math.round(
-      (sanitizeEnd - sanitizeStart) / target
-    );
-
-    // Extrapolate for 500 comments
-    results.extrapolated500Ms = Math.round(
-      ((sanitizeEnd - sanitizeStart) / target) * 500
-    );
+  if (!fetchSucceeded) {
+    results.fetchError = results.fetchError ?? "All Reddit URLs returned non-200";
+    results.fetchNote = "Reddit may block .json requests from Vercel IPs. Testing DOMPurify with synthetic HTML instead.";
   }
+
+  // Step 2: Sanitize with DOMPurify
+  // If Reddit fetch failed, use synthetic HTML to still benchmark DOMPurify
+  if (commentBodies.length === 0) {
+    const syntheticHtml = '&lt;div class="md"&gt;&lt;p&gt;This is a &lt;strong&gt;test comment&lt;/strong&gt; with a &lt;a href="https://example.com"&gt;link&lt;/a&gt; and some &lt;em&gt;formatting&lt;/em&gt;. Here is a longer paragraph to simulate typical Reddit comment length with various HTML elements and nested structures.&lt;/p&gt;&lt;blockquote&gt;&lt;p&gt;This is a quoted reply that adds more content.&lt;/p&gt;&lt;/blockquote&gt;&lt;/div&gt;';
+    commentBodies = Array(100).fill(syntheticHtml);
+    results.sanitizeSource = "synthetic (Reddit fetch failed)";
+  } else {
+    results.sanitizeSource = "live Reddit comments";
+  }
+
+  const target = Math.min(commentBodies.length, 100);
+  const sanitizeStart = performance.now();
+  for (let i = 0; i < target; i++) {
+    await sanitizeHtml(commentBodies[i]);
+  }
+  const sanitizeEnd = performance.now();
+  results.sanitizeMs = Math.round(sanitizeEnd - sanitizeStart);
+  results.sanitizeCount = target;
+  results.sanitizeMsPerComment = Math.round(
+    (sanitizeEnd - sanitizeStart) / target
+  );
+  results.extrapolated500Ms = Math.round(
+    ((sanitizeEnd - sanitizeStart) / target) * 500
+  );
 
   // Step 3: Redis write
   const client = redis();
