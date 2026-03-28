@@ -83,9 +83,18 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Return normalized URL so client fetches the full thread (not a comment subtree)
-  const normalizedUrl = normalizeRedditUrl(url);
-  const fetchUrl = `${normalizedUrl}.json`;
+  // Build fetch URL preserving the slug (Reddit may require it for CORS).
+  // Only strip comment ID deep-links and query params, keep the title slug.
+  let fetchPath = url.split("?")[0].split("#")[0];
+  fetchPath = fetchPath.replace(/\/+$/, "").replace(/\.json$/, "").replace(/\/+$/, "");
+  // Strip comment ID (e.g., /comments/abc/slug/def → /comments/abc/slug)
+  const commentDeepLink = fetchPath.match(
+    /(\/r\/[^/]+\/comments\/[a-z0-9]+\/[^/]+)\/[a-z0-9]+$/i
+  );
+  if (commentDeepLink) {
+    fetchPath = fetchPath.substring(0, commentDeepLink.index! + commentDeepLink[1].length);
+  }
+  const fetchUrl = `${fetchPath}.json`;
 
   logRequest("cache_miss", { threadId, duration });
   return NextResponse.json(

@@ -13,6 +13,50 @@ body {
   color: var(--text-primary);
 }
 
+/* ── App Layout ────────────────────────────────────────────────── */
+
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app-layout__main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* ── Tooltip ───────────────────────────────────────────────────── */
+
+.graph-tooltip {
+  position: absolute;
+  pointer-events: none;
+  z-index: 30;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  box-shadow: var(--panel-shadow);
+  font-size: 12px;
+  max-width: 240px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.graph-tooltip__author {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.graph-tooltip__meta {
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
 /* ── ControlPanel ──────────────────────────────────────────────── */
 
 .control-panel {

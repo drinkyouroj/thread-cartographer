@@ -84,8 +84,8 @@ export default function UrlInput({ onThreadLoaded, onError }: UrlInputProps) {
           try {
             const body = await cacheRes.json();
             retryAfter = body.error?.retryAfter ?? 60;
-          } catch {
-            // Server returned non-JSON 429 — use default retry time
+          } catch (parseErr) {
+            console.warn("[UrlInput] Could not parse 429 response:", parseErr);
           }
           setError({
             message: `Too many requests. Please wait ${retryAfter} seconds.`,
@@ -101,8 +101,8 @@ export default function UrlInput({ onThreadLoaded, onError }: UrlInputProps) {
           try {
             const body = await cacheRes.json();
             message = body.error?.message ?? "Invalid URL";
-          } catch {
-            // Server returned non-JSON 400 — use default message
+          } catch (parseErr) {
+            console.warn("[UrlInput] Could not parse 400 response:", parseErr);
           }
           setError({ message, isWarning: false });
           setLoadState("idle");
@@ -117,12 +117,21 @@ export default function UrlInput({ onThreadLoaded, onError }: UrlInputProps) {
 
         // Phase 2: Cache miss — fetch from Reddit (client-side)
         const cacheBody = await cacheRes.json();
-        const fetchUrl = cacheBody.data?.fetchUrl;
+        const fetchUrl = cacheBody.meta?.fetchUrl;
         if (!fetchUrl) throw new Error("No fetchUrl in cache miss response");
 
-        const redditRes = await fetch(fetchUrl, {
-          signal: controller.signal,
-        });
+        let redditRes: Response;
+        try {
+          redditRes = await fetch(fetchUrl, {
+            signal: controller.signal,
+          });
+        } catch (fetchErr) {
+          if ((fetchErr as Error).name === "AbortError") throw fetchErr;
+          // CORS block or network failure — Reddit doesn't serve CORS headers consistently
+          throw new Error(
+            "Could not reach Reddit. Check your connection, or try again in a moment."
+          );
+        }
 
         if (!redditRes.ok) {
           throw new Error(
@@ -147,8 +156,8 @@ export default function UrlInput({ onThreadLoaded, onError }: UrlInputProps) {
             const body = await processRes.json();
             msg = body.error?.message ?? msg;
             retryAfter = body.error?.retryAfter ?? 60;
-          } catch {
-            // Server returned non-JSON error — use defaults
+          } catch (parseErr) {
+            console.warn("[UrlInput] Could not parse error response:", parseErr);
           }
 
           if (processRes.status === 429) {

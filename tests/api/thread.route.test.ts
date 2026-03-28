@@ -71,9 +71,9 @@ describe("GET /api/thread", () => {
       )
     );
     const data = await res.json();
-    // fetchUrl should point to the full thread, not the comment subtree
+    // fetchUrl should strip comment ID but preserve slug (Reddit needs slug for CORS)
     expect(data.meta.fetchUrl).toBe(
-      "https://www.reddit.com/r/test/comments/abc123.json"
+      "https://www.reddit.com/r/test/comments/abc123/title.json"
     );
   });
 });

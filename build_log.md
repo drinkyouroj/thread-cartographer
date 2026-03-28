@@ -316,3 +316,84 @@ tests/fixtures/         ✅ 6 Reddit JSON fixtures
 - d3-zoom integration on ThreadGraph (pan/zoom with Canvas redraws)
 - Click-to-select node → open NodeDetail
 - Verify Reddit CORS from browser on preview deployment
+
+---
+
+## 2026-03-28 — Week 2 Day 5: Full Integration + Zoom + Interaction
+
+### Done
+- `app/page.tsx`: Full state orchestration
+  - Composes UrlInput, ControlPanel, ThreadGraph, NodeDetail
+  - useState for threadData, selectedNode, filter
+  - useMemo for maxAvailableDepth and visibleNodes count
+  - Filter initializes to show all nodes on thread load
+  - App layout: full-height flex with UrlInput header, main area (ControlPanel + ThreadGraph + NodeDetail)
+- `components/ThreadGraph.tsx`: Complete rewrite with all interaction
+  - d3-zoom: pan/zoom via d3-selection.call(zoom()), scaleExtent [0.1, 8], transform stored in ref
+  - ctx.setTransform() replaces accumulating ctx.scale() for retina (no transform leakage)
+  - Click-to-select: canvas click → findNodeAtPoint() → onNodeClick callback
+  - Hover tooltip: mousemove → quadtree hit-test → tooltip overlay with author, score, depth
+  - Cursor changes: pointer on node hover, grab/grabbing for pan
+  - All event listeners attached via useEffect with proper cleanup
+  - Coordinate alignment: DOM events → centered canvas coords → graph coords via transform inversion
+- CSS additions: app-layout (full-height flex), tooltip styles
+- Cleaned up unused eslint-disable directives
+
+### Week 2 Definition of Done Progress
+- [x] Nodes sized by score, colored by sentiment (blue/gray/orange)
+- [x] Nodes with `score_hidden: true` use median radius
+- [x] Pan/zoom with mouse wheel and drag ← NEW
+- [x] Click node → detail panel shows author, score, sanitized body, permalink ← NEW
+- [x] Depth slider hides nodes beyond selected depth ← NEW (via page.tsx state)
+- [x] Score threshold hides nodes below selected score ← NEW (via page.tsx state)
+- [x] Color legend visible in control panel
+- [x] All unit tests pass (164 passing)
+- [ ] Paste URL → graph renders within 10s (needs CORS verification on preview)
+- [ ] Integration tests pass in CI
+- [ ] ThreadGraph fallback decision documented
+
+### Git State
+- Branch: develop (PR #5 merged)
+- 164 tests passing, type-check clean, lint clean (2 pre-existing warnings)
+
+### What's Built So Far
+```
+lib/
+  types.ts              ✅ All core types
+  errors.ts             ✅ Error classes
+  redis.ts              ✅ Singleton client with failure detection
+  cache.ts              ✅ Upstash 15-min TTL
+  rateLimiter.ts        ✅ Sliding window
+  sentiment.ts          ✅ AFINN scoring
+  afinn.ts              ✅ AFINN-165 word list
+  sanitize.ts           ✅ sanitize-html
+  dataSource.ts         ✅ DataSource interface
+  redditParser.ts       ✅ Full Reddit JSON parser
+  redditJsonDataSource.ts ✅ DataSource impl
+  graphUtils.ts         ✅ Node sizing, hit-testing, transforms, Canvas draw
+app/
+  page.tsx              ✅ Full state orchestration, all components composed
+  layout.tsx            ✅ Dark mode, Geist fonts
+  globals.css           ✅ Theme + all component + layout styles
+  api/health/route.ts   ✅ Redis status
+  api/thread/route.ts   ✅ Two-phase API
+components/
+  ControlPanel.tsx      ✅ Depth slider, score filter, legend
+  NodeDetail.tsx        ✅ Slide-out panel, focus trap
+  UrlInput.tsx          ✅ Two-phase fetch, validation, loading states
+  ThreadGraph.tsx       ✅ Canvas + Worker + d3-zoom + click + hover
+workers/
+  forceLayout.worker.ts ✅ D3 force simulation + Float32Array + nodeIds
+styles/theme.css        ✅ Dark mode, color-blind-safe palette
+.github/workflows/ci.yml ✅ CI pipeline
+tests/                  ✅ 164 tests across 13 files
+tests/fixtures/         ✅ 6 Reddit JSON fixtures
+```
+
+### Next (Day 6+)
+- Verify Reddit CORS from browser on Vercel preview deployment
+- next.config.ts: security headers (CSP including worker-src 'self')
+- Integration tests for full request flow
+- E2E test: paste URL → graph renders → click node → use filter
+- Keyboard navigation for Canvas nodes (index-based traversal)
+- Error boundary components around ThreadGraph and NodeDetail
