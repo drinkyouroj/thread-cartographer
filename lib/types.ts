@@ -67,17 +67,20 @@ export type WorkerInboundMessage =
 export interface WorkerTickMessage {
   type: "TICK";
   positions: Float32Array | Array<{ id: string; x: number; y: number }>;
+  nodeIds?: string[]; // required when positions is Float32Array (maps index → node ID)
   alpha: number;
 }
 
 export interface WorkerStabilizedMessage {
   type: "STABILIZED";
   positions: Float32Array | Array<{ id: string; x: number; y: number }>;
+  nodeIds?: string[]; // required when positions is Float32Array (maps index → node ID)
 }
 
 export interface WorkerErrorMessage {
   type: "ERROR";
   message: string;
+  stack?: string;
 }
 
 export type WorkerOutboundMessage =

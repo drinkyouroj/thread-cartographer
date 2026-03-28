@@ -95,6 +95,36 @@ describe("forceLayout.worker", () => {
       const errors = messages.filter((m: { type: string }) => m.type === "ERROR");
       expect(errors).toHaveLength(0);
     });
+
+    it("uses Float32Array with nodeIds for large node sets (>200)", async () => {
+      // Generate 210 nodes (above FLOAT32_THRESHOLD of 200)
+      const nodes = Array.from({ length: 210 }, (_, i) => ({ id: `n${i}` }));
+      const edges = Array.from({ length: 209 }, (_, i) => ({
+        source: `n${i}`,
+        target: `n${i + 1}`,
+      }));
+
+      sendMessage({ type: "INIT", nodes, edges });
+
+      // Wait for simulation ticks
+      await new Promise((r) => setTimeout(r, 500));
+
+      const messages = postMessageSpy.mock.calls.map((c) => c[0]);
+      const tickOrStabilized = messages.find(
+        (m: { type: string }) => m.type === "TICK" || m.type === "STABILIZED"
+      );
+      expect(tickOrStabilized).toBeDefined();
+
+      // Should use Float32Array (not JSON array) for >200 nodes
+      expect(tickOrStabilized.positions).toBeInstanceOf(Float32Array);
+      expect(tickOrStabilized.positions.length).toBe(210 * 2); // x,y pairs
+
+      // Must include nodeIds for the receiver to map positions back to nodes
+      expect(tickOrStabilized.nodeIds).toBeDefined();
+      expect(Array.isArray(tickOrStabilized.nodeIds)).toBe(true);
+      expect(tickOrStabilized.nodeIds.length).toBe(210);
+      expect(tickOrStabilized.nodeIds[0]).toBe("n0");
+    });
   });
 
   describe("STOP message", () => {
@@ -142,6 +172,21 @@ describe("forceLayout.worker", () => {
       // Should reheat and produce new ticks
       await new Promise((r) => setTimeout(r, 300));
       expect(postMessageSpy.mock.calls.length).toBeGreaterThan(0);
+    });
+
+    it("handles FILTER before INIT without error", () => {
+      sendMessage({
+        type: "FILTER",
+        visibleNodeIds: ["a", "b"],
+      });
+
+      const messages = postMessageSpy.mock.calls.map((c) => c[0]);
+      const errors = messages.filter((m: { type: string }) => m.type === "ERROR");
+      expect(errors).toHaveLength(0);
+
+      // Should not produce any TICK messages (no simulation running)
+      const ticks = messages.filter((m: { type: string }) => m.type === "TICK");
+      expect(ticks).toHaveLength(0);
     });
   });
 

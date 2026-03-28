@@ -53,14 +53,16 @@ const ALPHA_MIN = 0.001; // simulation stops at this alpha
 
 function encodePositionsFloat32(
   nodeList: SimNode[]
-): { buffer: Float32Array; transfer: ArrayBuffer } {
-  // Layout: [x0, y0, x1, y1, ...] — caller must know node order matches init order
+): { buffer: Float32Array; nodeIds: string[]; transfer: ArrayBuffer } {
+  // Layout: [x0, y0, x1, y1, ...] paired with nodeIds array for index → ID mapping
   const buffer = new Float32Array(nodeList.length * 2);
+  const nodeIds: string[] = new Array(nodeList.length);
   for (let i = 0; i < nodeList.length; i++) {
     buffer[i * 2] = nodeList[i].x;
     buffer[i * 2 + 1] = nodeList[i].y;
+    nodeIds[i] = nodeList[i].id;
   }
-  return { buffer, transfer: buffer.buffer };
+  return { buffer, nodeIds, transfer: buffer.buffer };
 }
 
 function encodePositionsJSON(
@@ -75,10 +77,11 @@ function broadcastPositions(alpha: number, type: "TICK" | "STABILIZED") {
     : nodes;
 
   if (activeNodes.length > FLOAT32_THRESHOLD) {
-    const { buffer, transfer } = encodePositionsFloat32(activeNodes);
+    const { buffer, nodeIds, transfer } = encodePositionsFloat32(activeNodes);
     const msg: WorkerTickMessage | WorkerStabilizedMessage = {
       type,
       positions: buffer,
+      nodeIds,
       ...(type === "TICK" ? { alpha } : {}),
     } as WorkerTickMessage | WorkerStabilizedMessage;
     // Worker postMessage with transferable ArrayBuffer
@@ -147,12 +150,22 @@ function initSimulation(
 function onTick() {
   tickCount++;
   if (tickCount % TICK_BROADCAST_INTERVAL === 0) {
-    broadcastPositions(simulation?.alpha() ?? 0, "TICK");
+    try {
+      broadcastPositions(simulation?.alpha() ?? 0, "TICK");
+    } catch (err) {
+      postError(err instanceof Error ? err.message : String(err),
+        err instanceof Error ? err.stack : undefined);
+    }
   }
 }
 
 function onEnd() {
-  broadcastPositions(0, "STABILIZED");
+  try {
+    broadcastPositions(0, "STABILIZED");
+  } catch (err) {
+    postError(err instanceof Error ? err.message : String(err),
+      err instanceof Error ? err.stack : undefined);
+  }
 }
 
 // ── Filter handling ─────────────────────────────────────────────────
@@ -192,11 +205,14 @@ self.onmessage = (event: MessageEvent<WorkerInboundMessage>) => {
         postError(`Unknown message type: ${(msg as { type: string }).type}`);
     }
   } catch (err) {
-    postError(err instanceof Error ? err.message : String(err));
+    postError(
+      err instanceof Error ? err.message : String(err),
+      err instanceof Error ? err.stack : undefined
+    );
   }
 };
 
-function postError(message: string) {
-  const msg: WorkerErrorMessage = { type: "ERROR", message };
+function postError(message: string, stack?: string) {
+  const msg: WorkerErrorMessage = { type: "ERROR", message, stack };
   self.postMessage(msg);
 }

@@ -146,4 +146,40 @@ describe("NodeDetail", () => {
     const panel = screen.getByRole("complementary", { hidden: true });
     expect(panel.getAttribute("aria-hidden")).toBe("true");
   });
+
+  it("traps focus: Tab on last element wraps to first", () => {
+    const { container } = render(
+      <NodeDetail node={mockNode} onClose={vi.fn()} />
+    );
+
+    const panel = container.querySelector(".node-detail")!;
+    const closeBtn = screen.getByLabelText("Close detail panel");
+    const permalink = screen.getByRole("link", { name: /view on reddit/i });
+
+    // Focus the last focusable element (permalink)
+    (permalink as HTMLElement).focus();
+    expect(document.activeElement).toBe(permalink);
+
+    // Tab should wrap to first focusable (close button)
+    fireEvent.keyDown(panel, { key: "Tab" });
+    expect(document.activeElement).toBe(closeBtn);
+  });
+
+  it("traps focus: Shift+Tab on first element wraps to last", () => {
+    const { container } = render(
+      <NodeDetail node={mockNode} onClose={vi.fn()} />
+    );
+
+    const panel = container.querySelector(".node-detail")!;
+    const closeBtn = screen.getByLabelText("Close detail panel");
+    const permalink = screen.getByRole("link", { name: /view on reddit/i });
+
+    // Focus the first focusable element (close button)
+    closeBtn.focus();
+    expect(document.activeElement).toBe(closeBtn);
+
+    // Shift+Tab should wrap to last focusable (permalink)
+    fireEvent.keyDown(panel, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(permalink);
+  });
 });
