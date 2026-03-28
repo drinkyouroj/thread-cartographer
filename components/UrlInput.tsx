@@ -120,9 +120,18 @@ export default function UrlInput({ onThreadLoaded, onError }: UrlInputProps) {
         const fetchUrl = cacheBody.meta?.fetchUrl;
         if (!fetchUrl) throw new Error("No fetchUrl in cache miss response");
 
-        const redditRes = await fetch(fetchUrl, {
-          signal: controller.signal,
-        });
+        let redditRes: Response;
+        try {
+          redditRes = await fetch(fetchUrl, {
+            signal: controller.signal,
+          });
+        } catch (fetchErr) {
+          if ((fetchErr as Error).name === "AbortError") throw fetchErr;
+          // CORS block or network failure — Reddit doesn't serve CORS headers consistently
+          throw new Error(
+            "Could not reach Reddit. Check your connection, or try again in a moment."
+          );
+        }
 
         if (!redditRes.ok) {
           throw new Error(
