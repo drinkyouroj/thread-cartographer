@@ -3,7 +3,6 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import { zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from "d3-zoom";
 import { select } from "d3-selection";
-import "d3-transition"; // Side-effect import — adds .transition() to d3 selections
 import type {
   CommentNode,
   ThreadData,
@@ -255,8 +254,11 @@ export default function ThreadGraph({
     const ty = canvasHeight / 2 - centerY * scale;
 
     const fitTransform = zoomIdentity.translate(tx, ty).scale(scale);
+
+    // Set transform directly (not animated) — this updates d3-zoom's internal
+    // state and fires the zoom event, which updates transformRef and redraws.
     const sel = select(canvas);
-    sel.transition().duration(500).call(zoomBehavior.transform, fitTransform);
+    sel.call(zoomBehavior.transform, fitTransform);
   }, []);
 
   // ── d3-zoom integration ─────────────────────────────────────────
