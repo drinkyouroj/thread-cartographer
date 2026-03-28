@@ -218,17 +218,11 @@ export default function ThreadGraph({
   const fitGraphToViewport = useCallback(() => {
     const canvas = canvasRef.current;
     const zoomBehavior = zoomBehaviorRef.current;
-    if (!canvas || !zoomBehavior) {
-      console.warn("[fitGraph] SKIP: canvas=%o, zoomBehavior=%o", !!canvas, !!zoomBehavior);
-      return;
-    }
+    if (!canvas || !zoomBehavior) return;
 
     const positions = positionsRef.current;
     const ids = Object.keys(positions);
-    if (ids.length === 0) {
-      console.warn("[fitGraph] SKIP: 0 positions");
-      return;
-    }
+    if (ids.length === 0) return;
 
     // Compute bounding box in graph coordinates
     let minX = Infinity, maxX = -Infinity;
@@ -259,22 +253,12 @@ export default function ThreadGraph({
     const tx = canvasWidth / 2 - centerX * scale;
     const ty = canvasHeight / 2 - centerY * scale;
 
-    console.log("[fitGraph] bbox: x=[%f,%f] y=[%f,%f] center=(%f,%f) size=%fx%f",
-      minX, maxX, minY, maxY, centerX, centerY, graphWidth, graphHeight);
-    console.log("[fitGraph] canvas: %dx%d, scale=%f, translate=(%f,%f)",
-      canvasWidth, canvasHeight, scale, tx, ty);
-    console.log("[fitGraph] positions count=%d, current transform: k=%f tx=%f ty=%f",
-      ids.length, transformRef.current.k, transformRef.current.x, transformRef.current.y);
-
     const fitTransform = zoomIdentity.translate(tx, ty).scale(scale);
 
     // Set transform directly (not animated) — this updates d3-zoom's internal
     // state and fires the zoom event, which updates transformRef and redraws.
     const sel = select(canvas);
     sel.call(zoomBehavior.transform, fitTransform);
-
-    console.log("[fitGraph] APPLIED: k=%f tx=%f ty=%f",
-      transformRef.current.k, transformRef.current.x, transformRef.current.y);
   }, []);
 
   // ── d3-zoom integration ─────────────────────────────────────────
@@ -304,8 +288,6 @@ export default function ThreadGraph({
       canvas.clientWidth / 2,
       canvas.clientHeight / 2
     );
-    console.log("[ThreadGraph] zoom init: canvas=%dx%d, initial transform translate(%f,%f)",
-      canvas.clientWidth, canvas.clientHeight, canvas.clientWidth / 2, canvas.clientHeight / 2);
     sel.call(zoomBehavior.transform, initialTransform);
     transformRef.current = initialTransform;
 
@@ -466,13 +448,9 @@ export default function ThreadGraph({
           setIsSimulating(false);
           // Auto-fit graph to viewport on first stabilization for this thread
           const threadId = dataRef.current?.threadId;
-          console.log("[ThreadGraph] STABILIZED: threadId=%s, hasAutoFitted=%s, positionCount=%d",
-            threadId, hasAutoFittedRef.current, Object.keys(positionsRef.current).length);
           if (threadId && hasAutoFittedRef.current !== threadId) {
             hasAutoFittedRef.current = threadId;
             fitGraphToViewport();
-          } else {
-            console.log("[ThreadGraph] STABILIZED: skipping fitGraph (already fitted or no threadId)");
           }
         }
 
