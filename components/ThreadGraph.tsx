@@ -313,7 +313,9 @@ export default function ThreadGraph({
       sel.on(".zoom", null);
       zoomBehaviorRef.current = null;
     };
-  }, []);
+    // Re-run when data presence changes — canvas only exists when data is non-null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!data]);
 
   // ── Click handler — hit-test and select node ────────────────────
 
@@ -346,7 +348,8 @@ export default function ThreadGraph({
 
     canvas.addEventListener("click", handleClick);
     return () => canvas.removeEventListener("click", handleClick);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!data]);
 
   // ── Hover handler — show tooltip on mousemove ───────────────────
   // Optimized: only calls setTooltipState when the hovered node changes
@@ -410,7 +413,8 @@ export default function ThreadGraph({
       canvas.removeEventListener("mousemove", handleMouseMove);
       canvas.removeEventListener("mouseleave", handleMouseLeave);
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!data]);
 
   // ── Worker lifecycle ────────────────────────────────────────────
 
