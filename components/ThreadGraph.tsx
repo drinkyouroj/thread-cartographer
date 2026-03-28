@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useEffect, useCallback, useState } from "react";
-import { zoomIdentity, type ZoomTransform } from "d3-zoom";
+import { zoom, zoomIdentity, type ZoomTransform } from "d3-zoom";
+import { select } from "d3-selection";
 import type {
   CommentNode,
   ThreadData,
@@ -13,6 +14,7 @@ import {
   nodeRadius,
   drawNode,
   drawEdge,
+  findNodeAtPoint,
 } from "../lib/graphUtils";
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -26,6 +28,12 @@ interface ThreadGraphProps {
 
 interface PositionMap {
   [nodeId: string]: { x: number; y: number };
+}
+
+interface TooltipState {
+  node: CommentNode;
+  x: number;
+  y: number;
 }
 
 // ── Constants ───────────────────────────────────────────────────────
@@ -42,21 +50,25 @@ export default function ThreadGraph({
   selectedNodeId,
 }: ThreadGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const workerRef = useRef<Worker | null>(null);
   const positionsRef = useRef<PositionMap>({});
   const animFrameRef = useRef<number>(0);
-  const [transform] = useState<ZoomTransform>(() => zoomIdentity);
+  const transformRef = useRef<ZoomTransform>(zoomIdentity);
   const [isSimulating, setIsSimulating] = useState(false);
+  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
   // Store current props in refs so draw() always reads fresh values
   const dataRef = useRef(data);
   const filterRef = useRef(filter);
   const selectedNodeIdRef = useRef(selectedNodeId);
+  const onNodeClickRef = useRef(onNodeClick);
   dataRef.current = data;
   filterRef.current = filter;
   selectedNodeIdRef.current = selectedNodeId;
+  onNodeClickRef.current = onNodeClick;
 
-  // ── Derive visible nodes from filter (for render logic) ─────────
+  // ── Derive visible nodes from filter (for render decisions) ─────
 
   const visibleNodes = data
     ? data.nodes.filter(
@@ -71,6 +83,38 @@ export default function ThreadGraph({
         (e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target)
       )
     : [];
+
+  // ── Build SimulationNodes from current state (for hit-testing) ──
+
+  function buildNodeMap(): {
+    nodeMap: Map<string, SimulationNode>;
+    scores: number[];
+  } {
+    const curData = dataRef.current;
+    const curFilter = filterRef.current;
+    const positions = positionsRef.current;
+
+    if (!curData) return { nodeMap: new Map(), scores: [] };
+
+    const nodes = curData.nodes.filter(
+      (n) => n.depth <= curFilter.maxDepth && n.score >= curFilter.minScore
+    );
+    const scores = nodes.filter((n) => !n.scoreHidden).map((n) => n.score);
+
+    const nodeMap = new Map<string, SimulationNode>();
+    for (const node of nodes) {
+      const pos = positions[node.id];
+      nodeMap.set(node.id, {
+        ...node,
+        x: pos?.x ?? 0,
+        y: pos?.y ?? 0,
+        vx: 0,
+        vy: 0,
+      });
+    }
+
+    return { nodeMap, scores };
+  }
 
   // ── Canvas draw — reads all state from refs for freshness ───────
 
@@ -88,6 +132,7 @@ export default function ThreadGraph({
     const curFilter = filterRef.current;
     const curSelectedId = selectedNodeIdRef.current;
     const positions = positionsRef.current;
+    const transform = transformRef.current;
 
     if (!curData) return;
 
@@ -122,8 +167,10 @@ export default function ThreadGraph({
     if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
       canvas.width = width * dpr;
       canvas.height = height * dpr;
-      ctx.scale(dpr, dpr);
     }
+
+    // Reset transform for retina + centering
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     // Clear
     ctx.clearRect(0, 0, width, height);
@@ -148,12 +195,13 @@ export default function ThreadGraph({
 
       // Selection ring
       if (id === curSelectedId) {
-        const [sx, sy] = [simNode.x * transform.k, simNode.y * transform.k];
+        const sx = simNode.x * transform.k + transform.x;
+        const sy = simNode.y * transform.k + transform.y;
         const scaledRadius = radius * transform.k;
         ctx.beginPath();
         ctx.arc(
-          sx + transform.x,
-          sy + transform.y,
+          sx,
+          sy,
           scaledRadius + SELECTED_RING_WIDTH,
           0,
           Math.PI * 2
@@ -165,11 +213,116 @@ export default function ThreadGraph({
     }
 
     ctx.restore();
-  }, [transform]);
+  }, []);
 
   // Store draw in a ref so Worker onmessage always calls the latest version
   const drawRef = useRef(draw);
   drawRef.current = draw;
+
+  function requestRedraw() {
+    cancelAnimationFrame(animFrameRef.current);
+    animFrameRef.current = requestAnimationFrame(() => drawRef.current());
+  }
+
+  // ── d3-zoom integration ─────────────────────────────────────────
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const zoomBehavior = zoom<HTMLCanvasElement, unknown>()
+      .scaleExtent([0.1, 8])
+      .on("zoom", (event) => {
+        transformRef.current = event.transform;
+        setTooltip(null); // hide tooltip during zoom
+        requestRedraw();
+      });
+
+    select(canvas).call(zoomBehavior);
+
+    return () => {
+      select(canvas).on(".zoom", null);
+    };
+  }, []);
+
+  // ── Click handler — hit-test and select node ────────────────────
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    function handleClick(e: MouseEvent) {
+      const rect = canvas!.getBoundingClientRect();
+      // Convert to centered coordinates (matching draw's ctx.translate)
+      const screenX = e.clientX - rect.left - rect.width / 2;
+      const screenY = e.clientY - rect.top - rect.height / 2;
+
+      const { nodeMap, scores } = buildNodeMap();
+      const nodesArray = Array.from(nodeMap.values());
+
+      const hit = findNodeAtPoint(
+        screenX,
+        screenY,
+        nodesArray,
+        transformRef.current,
+        scores
+      );
+
+      onNodeClickRef.current(hit);
+    }
+
+    canvas.addEventListener("click", handleClick);
+    return () => canvas.removeEventListener("click", handleClick);
+     
+  }, []);
+
+  // ── Hover handler — show tooltip on mousemove ───────────────────
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    function handleMouseMove(e: MouseEvent) {
+      const rect = canvas!.getBoundingClientRect();
+      const screenX = e.clientX - rect.left - rect.width / 2;
+      const screenY = e.clientY - rect.top - rect.height / 2;
+
+      const { nodeMap, scores } = buildNodeMap();
+      const nodesArray = Array.from(nodeMap.values());
+
+      const hit = findNodeAtPoint(
+        screenX,
+        screenY,
+        nodesArray,
+        transformRef.current,
+        scores
+      );
+
+      if (hit) {
+        canvas!.style.cursor = "pointer";
+        setTooltip({
+          node: hit,
+          x: e.clientX - rect.left + 12,
+          y: e.clientY - rect.top - 8,
+        });
+      } else {
+        canvas!.style.cursor = "grab";
+        setTooltip(null);
+      }
+    }
+
+    function handleMouseLeave() {
+      setTooltip(null);
+    }
+
+    canvas.addEventListener("mousemove", handleMouseMove);
+    canvas.addEventListener("mouseleave", handleMouseLeave);
+    return () => {
+      canvas.removeEventListener("mousemove", handleMouseMove);
+      canvas.removeEventListener("mouseleave", handleMouseLeave);
+    };
+     
+  }, []);
 
   // ── Worker lifecycle ────────────────────────────────────────────
 
@@ -183,10 +336,7 @@ export default function ThreadGraph({
     workerRef.current = worker;
 
     worker.onerror = (event: ErrorEvent) => {
-      console.error(
-        "[ThreadGraph] Worker failed:",
-        event.message
-      );
+      console.error("[ThreadGraph] Worker failed:", event.message);
       setIsSimulating(false);
     };
 
@@ -197,7 +347,6 @@ export default function ThreadGraph({
         const newPositions: PositionMap = {};
 
         if (msg.nodeIds && msg.positions instanceof Float32Array) {
-          // Float32Array path with nodeIds mapping
           for (let i = 0; i < msg.nodeIds.length; i++) {
             newPositions[msg.nodeIds[i]] = {
               x: msg.positions[i * 2],
@@ -205,7 +354,6 @@ export default function ThreadGraph({
             };
           }
         } else if (Array.isArray(msg.positions)) {
-          // JSON path
           for (const pos of msg.positions) {
             newPositions[pos.id] = { x: pos.x, y: pos.y };
           }
@@ -217,9 +365,7 @@ export default function ThreadGraph({
           setIsSimulating(false);
         }
 
-        // Request redraw using ref to get latest draw function
-        cancelAnimationFrame(animFrameRef.current);
-        animFrameRef.current = requestAnimationFrame(() => drawRef.current());
+        requestRedraw();
       }
 
       if (msg.type === "ERROR") {
@@ -242,7 +388,6 @@ export default function ThreadGraph({
       workerRef.current = null;
       cancelAnimationFrame(animFrameRef.current);
     };
-    // Only re-init worker when data changes, not on every filter change
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.threadId]);
 
@@ -256,17 +401,15 @@ export default function ThreadGraph({
       visibleNodeIds: Array.from(visibleNodeIds),
     });
 
-    // Redraw with current positions (filter may hide/show nodes)
-    cancelAnimationFrame(animFrameRef.current);
-    animFrameRef.current = requestAnimationFrame(() => drawRef.current());
+    requestRedraw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter.maxDepth, filter.minScore]);
 
   // ── Redraw on selection change ──────────────────────────────────
 
   useEffect(() => {
-    cancelAnimationFrame(animFrameRef.current);
-    animFrameRef.current = requestAnimationFrame(() => drawRef.current());
+    requestRedraw();
+     
   }, [selectedNodeId]);
 
   // ── Empty state ─────────────────────────────────────────────────
@@ -293,7 +436,11 @@ export default function ThreadGraph({
   }
 
   return (
-    <div className="thread-graph" style={{ position: "relative" }}>
+    <div
+      ref={containerRef}
+      className="thread-graph"
+      style={{ position: "relative" }}
+    >
       <canvas
         ref={canvasRef}
         className="thread-graph__canvas"
@@ -302,6 +449,19 @@ export default function ThreadGraph({
       />
       {isSimulating && (
         <div className="thread-graph__status">Laying out graph...</div>
+      )}
+      {tooltip && (
+        <div
+          className="graph-tooltip"
+          style={{ left: tooltip.x, top: tooltip.y }}
+        >
+          <div className="graph-tooltip__author">u/{tooltip.node.author}</div>
+          <div className="graph-tooltip__meta">
+            {tooltip.node.scoreHidden ? "score hidden" : `${tooltip.node.score} points`}
+            {" · "}
+            depth {tooltip.node.depth}
+          </div>
+        </div>
       )}
     </div>
   );
