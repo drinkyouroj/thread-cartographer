@@ -30,12 +30,6 @@ interface PositionMap {
   [nodeId: string]: { x: number; y: number };
 }
 
-interface TooltipState {
-  node: CommentNode;
-  x: number;
-  y: number;
-}
-
 // ── Constants ───────────────────────────────────────────────────────
 
 const SELECTED_RING_COLOR = "rgba(255, 255, 255, 0.8)";
@@ -50,13 +44,18 @@ export default function ThreadGraph({
   selectedNodeId,
 }: ThreadGraphProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const workerRef = useRef<Worker | null>(null);
   const positionsRef = useRef<PositionMap>({});
   const animFrameRef = useRef<number>(0);
   const transformRef = useRef<ZoomTransform>(zoomIdentity);
+  const tooltipNodeIdRef = useRef<string | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
-  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const [workerError, setWorkerError] = useState<string | null>(null);
+  const [tooltipState, setTooltipState] = useState<{
+    node: CommentNode;
+    x: number;
+    y: number;
+  } | null>(null);
 
   // Store current props in refs so draw() always reads fresh values
   const dataRef = useRef(data);
@@ -77,12 +76,6 @@ export default function ThreadGraph({
     : [];
 
   const visibleNodeIds = new Set(visibleNodes.map((n) => n.id));
-
-  const visibleEdges = data
-    ? data.edges.filter(
-        (e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target)
-      )
-    : [];
 
   // ── Build SimulationNodes from current state (for hit-testing) ──
 
@@ -117,6 +110,10 @@ export default function ThreadGraph({
   }
 
   // ── Canvas draw — reads all state from refs for freshness ───────
+  // Coordinate system: d3-zoom operates in top-left origin space.
+  // We bake centering into the zoom transform (initial translate to center),
+  // NOT via ctx.translate. This keeps d3-zoom, drawing, and hit-testing
+  // all in the same coordinate space.
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -169,15 +166,11 @@ export default function ThreadGraph({
       canvas.height = height * dpr;
     }
 
-    // Reset transform for retina + centering
+    // Reset transform for retina scaling only
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     // Clear
     ctx.clearRect(0, 0, width, height);
-
-    // Center the coordinate system
-    ctx.save();
-    ctx.translate(width / 2, height / 2);
 
     // Draw edges first (behind nodes)
     for (const edge of edges) {
@@ -199,20 +192,12 @@ export default function ThreadGraph({
         const sy = simNode.y * transform.k + transform.y;
         const scaledRadius = radius * transform.k;
         ctx.beginPath();
-        ctx.arc(
-          sx,
-          sy,
-          scaledRadius + SELECTED_RING_WIDTH,
-          0,
-          Math.PI * 2
-        );
+        ctx.arc(sx, sy, scaledRadius + SELECTED_RING_WIDTH, 0, Math.PI * 2);
         ctx.strokeStyle = SELECTED_RING_COLOR;
         ctx.lineWidth = SELECTED_RING_WIDTH;
         ctx.stroke();
       }
     }
-
-    ctx.restore();
   }, []);
 
   // Store draw in a ref so Worker onmessage always calls the latest version
@@ -225,6 +210,8 @@ export default function ThreadGraph({
   }
 
   // ── d3-zoom integration ─────────────────────────────────────────
+  // Set initial transform to center the graph in the canvas.
+  // d3-zoom operates in top-left origin, so centering = translate(w/2, h/2).
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -234,14 +221,27 @@ export default function ThreadGraph({
       .scaleExtent([0.1, 8])
       .on("zoom", (event) => {
         transformRef.current = event.transform;
-        setTooltip(null); // hide tooltip during zoom
+        // Clear tooltip during zoom to avoid stale position
+        if (tooltipNodeIdRef.current) {
+          tooltipNodeIdRef.current = null;
+          setTooltipState(null);
+        }
         requestRedraw();
       });
 
-    select(canvas).call(zoomBehavior);
+    const sel = select(canvas);
+    sel.call(zoomBehavior);
+
+    // Set initial transform to center graph origin in canvas
+    const initialTransform = zoomIdentity.translate(
+      canvas.clientWidth / 2,
+      canvas.clientHeight / 2
+    );
+    sel.call(zoomBehavior.transform, initialTransform);
+    transformRef.current = initialTransform;
 
     return () => {
-      select(canvas).on(".zoom", null);
+      sel.on(".zoom", null);
     };
   }, []);
 
@@ -252,10 +252,13 @@ export default function ThreadGraph({
     if (!canvas) return;
 
     function handleClick(e: MouseEvent) {
-      const rect = canvas!.getBoundingClientRect();
-      // Convert to centered coordinates (matching draw's ctx.translate)
-      const screenX = e.clientX - rect.left - rect.width / 2;
-      const screenY = e.clientY - rect.top - rect.height / 2;
+      const cvs = canvasRef.current;
+      if (!cvs) return;
+
+      const rect = cvs.getBoundingClientRect();
+      // d3-zoom operates in top-left origin — no centering offset needed
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
 
       const { nodeMap, scores } = buildNodeMap();
       const nodesArray = Array.from(nodeMap.values());
@@ -273,19 +276,22 @@ export default function ThreadGraph({
 
     canvas.addEventListener("click", handleClick);
     return () => canvas.removeEventListener("click", handleClick);
-     
   }, []);
 
   // ── Hover handler — show tooltip on mousemove ───────────────────
+  // Optimized: only calls setTooltipState when the hovered node changes
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     function handleMouseMove(e: MouseEvent) {
-      const rect = canvas!.getBoundingClientRect();
-      const screenX = e.clientX - rect.left - rect.width / 2;
-      const screenY = e.clientY - rect.top - rect.height / 2;
+      const cvs = canvasRef.current;
+      if (!cvs) return;
+
+      const rect = cvs.getBoundingClientRect();
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
 
       const { nodeMap, scores } = buildNodeMap();
       const nodesArray = Array.from(nodeMap.values());
@@ -299,20 +305,33 @@ export default function ThreadGraph({
       );
 
       if (hit) {
-        canvas!.style.cursor = "pointer";
-        setTooltip({
-          node: hit,
-          x: e.clientX - rect.left + 12,
-          y: e.clientY - rect.top - 8,
-        });
+        cvs.style.cursor = "pointer";
+        // Only trigger React re-render if hovered node changed
+        if (tooltipNodeIdRef.current !== hit.id) {
+          tooltipNodeIdRef.current = hit.id;
+          setTooltipState({
+            node: hit,
+            x: e.clientX - rect.left + 12,
+            y: e.clientY - rect.top - 8,
+          });
+        } else {
+          // Same node — update position in ref without re-render
+          // (tooltip stays near where it appeared)
+        }
       } else {
-        canvas!.style.cursor = "grab";
-        setTooltip(null);
+        cvs.style.cursor = "grab";
+        if (tooltipNodeIdRef.current !== null) {
+          tooltipNodeIdRef.current = null;
+          setTooltipState(null);
+        }
       }
     }
 
     function handleMouseLeave() {
-      setTooltip(null);
+      if (tooltipNodeIdRef.current !== null) {
+        tooltipNodeIdRef.current = null;
+        setTooltipState(null);
+      }
     }
 
     canvas.addEventListener("mousemove", handleMouseMove);
@@ -321,23 +340,31 @@ export default function ThreadGraph({
       canvas.removeEventListener("mousemove", handleMouseMove);
       canvas.removeEventListener("mouseleave", handleMouseLeave);
     };
-     
   }, []);
 
   // ── Worker lifecycle ────────────────────────────────────────────
 
   useEffect(() => {
-    if (!data || visibleNodes.length === 0) return;
+    if (!data) return;
 
-    // Create worker
-    const worker = new Worker(
-      new URL("../workers/forceLayout.worker.ts", import.meta.url)
-    );
+    setWorkerError(null);
+
+    let worker: Worker;
+    try {
+      worker = new Worker(
+        new URL("../workers/forceLayout.worker.ts", import.meta.url)
+      );
+    } catch (err) {
+      console.error("[ThreadGraph] Failed to create Web Worker:", err);
+      setWorkerError("Visualization engine failed to load. Try refreshing.");
+      return;
+    }
     workerRef.current = worker;
 
     worker.onerror = (event: ErrorEvent) => {
       console.error("[ThreadGraph] Worker failed:", event.message);
       setIsSimulating(false);
+      setWorkerError("Visualization failed to load. Try refreshing.");
     };
 
     worker.onmessage = (event: MessageEvent<WorkerOutboundMessage>) => {
@@ -371,15 +398,17 @@ export default function ThreadGraph({
       if (msg.type === "ERROR") {
         console.error("[ThreadGraph Worker]", msg.message, msg.stack);
         setIsSimulating(false);
+        setWorkerError("Graph layout failed. Try refreshing.");
       }
     };
 
-    // Send INIT
+    // Send INIT with ALL nodes/edges — Worker simulates the full graph.
+    // Visibility filtering is handled by FILTER messages and draw().
     setIsSimulating(true);
     worker.postMessage({
       type: "INIT",
-      nodes: visibleNodes.map((n) => ({ id: n.id })),
-      edges: visibleEdges.map((e) => ({ source: e.source, target: e.target })),
+      nodes: data.nodes.map((n) => ({ id: n.id })),
+      edges: data.edges.map((e) => ({ source: e.source, target: e.target })),
     });
 
     return () => {
@@ -409,7 +438,6 @@ export default function ThreadGraph({
 
   useEffect(() => {
     requestRedraw();
-     
   }, [selectedNodeId]);
 
   // ── Empty state ─────────────────────────────────────────────────
@@ -420,6 +448,14 @@ export default function ThreadGraph({
         <p className="thread-graph__placeholder">
           Paste a Reddit thread URL to visualize its comment structure
         </p>
+      </div>
+    );
+  }
+
+  if (workerError) {
+    return (
+      <div className="thread-graph thread-graph--empty">
+        <p className="thread-graph__placeholder">{workerError}</p>
       </div>
     );
   }
@@ -436,11 +472,7 @@ export default function ThreadGraph({
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="thread-graph"
-      style={{ position: "relative" }}
-    >
+    <div className="thread-graph" style={{ position: "relative" }}>
       <canvas
         ref={canvasRef}
         className="thread-graph__canvas"
@@ -450,16 +482,18 @@ export default function ThreadGraph({
       {isSimulating && (
         <div className="thread-graph__status">Laying out graph...</div>
       )}
-      {tooltip && (
+      {tooltipState && (
         <div
           className="graph-tooltip"
-          style={{ left: tooltip.x, top: tooltip.y }}
+          style={{ left: tooltipState.x, top: tooltipState.y }}
         >
-          <div className="graph-tooltip__author">u/{tooltip.node.author}</div>
+          <div className="graph-tooltip__author">u/{tooltipState.node.author}</div>
           <div className="graph-tooltip__meta">
-            {tooltip.node.scoreHidden ? "score hidden" : `${tooltip.node.score} points`}
+            {tooltipState.node.scoreHidden
+              ? "score hidden"
+              : `${tooltipState.node.score} points`}
             {" · "}
-            depth {tooltip.node.depth}
+            depth {tooltipState.node.depth}
           </div>
         </div>
       )}

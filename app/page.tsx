@@ -15,10 +15,10 @@ export default function Home() {
     minScore: -100,
   });
 
-  // Compute max available depth from data for the slider
+  // Compute max available depth from data for the slider (reduce, not spread)
   const maxAvailableDepth = useMemo(() => {
     if (!threadData) return 0;
-    return Math.max(0, ...threadData.nodes.map((n) => n.depth));
+    return threadData.nodes.reduce((max, n) => Math.max(max, n.depth), 0);
   }, [threadData]);
 
   // Compute visible node count for the control panel stats
@@ -29,27 +29,30 @@ export default function Home() {
     ).length;
   }, [threadData, filter]);
 
-  const handleThreadLoaded = useCallback(
-    (data: ThreadData) => {
-      setThreadData(data);
-      setSelectedNode(null);
-      // Set initial filter to show all nodes
-      const maxDepth = Math.max(0, ...data.nodes.map((n) => n.depth));
-      setFilter({ maxDepth, minScore: -100 });
-    },
-    []
-  );
+  // Derive effective selected node — null if filtered out
+  const effectiveSelectedNode = useMemo(() => {
+    if (!selectedNode) return null;
+    const isVisible =
+      selectedNode.depth <= filter.maxDepth &&
+      selectedNode.score >= filter.minScore;
+    return isVisible ? selectedNode : null;
+  }, [selectedNode, filter]);
+
+  const handleThreadLoaded = useCallback((data: ThreadData) => {
+    setThreadData(data);
+    setSelectedNode(null);
+    // Set initial filter to show all nodes (reduce, not spread)
+    const maxDepth = data.nodes.reduce((max, n) => Math.max(max, n.depth), 0);
+    setFilter({ maxDepth, minScore: -100 });
+  }, []);
 
   const handleError = useCallback(() => {
     // Errors are displayed inline by UrlInput — no page-level handling needed
   }, []);
 
-  const handleNodeClick = useCallback(
-    (node: CommentNode | null) => {
-      setSelectedNode(node);
-    },
-    []
-  );
+  const handleNodeClick = useCallback((node: CommentNode | null) => {
+    setSelectedNode(node);
+  }, []);
 
   const handleDetailClose = useCallback(() => {
     setSelectedNode(null);
@@ -70,9 +73,9 @@ export default function Home() {
           data={threadData}
           filter={filter}
           onNodeClick={handleNodeClick}
-          selectedNodeId={selectedNode?.id ?? null}
+          selectedNodeId={effectiveSelectedNode?.id ?? null}
         />
-        <NodeDetail node={selectedNode} onClose={handleDetailClose} />
+        <NodeDetail node={effectiveSelectedNode} onClose={handleDetailClose} />
       </div>
     </div>
   );

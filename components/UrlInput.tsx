@@ -84,8 +84,8 @@ export default function UrlInput({ onThreadLoaded, onError }: UrlInputProps) {
           try {
             const body = await cacheRes.json();
             retryAfter = body.error?.retryAfter ?? 60;
-          } catch {
-            // Server returned non-JSON 429 — use default retry time
+          } catch (parseErr) {
+            console.warn("[UrlInput] Could not parse 429 response:", parseErr);
           }
           setError({
             message: `Too many requests. Please wait ${retryAfter} seconds.`,
@@ -101,8 +101,8 @@ export default function UrlInput({ onThreadLoaded, onError }: UrlInputProps) {
           try {
             const body = await cacheRes.json();
             message = body.error?.message ?? "Invalid URL";
-          } catch {
-            // Server returned non-JSON 400 — use default message
+          } catch (parseErr) {
+            console.warn("[UrlInput] Could not parse 400 response:", parseErr);
           }
           setError({ message, isWarning: false });
           setLoadState("idle");
@@ -147,8 +147,8 @@ export default function UrlInput({ onThreadLoaded, onError }: UrlInputProps) {
             const body = await processRes.json();
             msg = body.error?.message ?? msg;
             retryAfter = body.error?.retryAfter ?? 60;
-          } catch {
-            // Server returned non-JSON error — use defaults
+          } catch (parseErr) {
+            console.warn("[UrlInput] Could not parse error response:", parseErr);
           }
 
           if (processRes.status === 429) {
