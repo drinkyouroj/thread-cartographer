@@ -27,8 +27,6 @@ export function nodeRadius(
   scoreHidden: boolean,
   allScores: number[]
 ): number {
-  // Filter to non-hidden scores for range calculation
-  const visibleScores = allScores.filter((_, i) => !scoreHidden || i === -1);
   // If scoreHidden, use the median radius of all non-hidden nodes
   if (scoreHidden) {
     return medianRadius(allScores);

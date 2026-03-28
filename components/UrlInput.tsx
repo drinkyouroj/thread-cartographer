@@ -80,9 +80,15 @@ export default function UrlInput({ onThreadLoaded, onError }: UrlInputProps) {
         }
 
         if (cacheRes.status === 429) {
-          const body = await cacheRes.json();
+          let retryAfter = 60;
+          try {
+            const body = await cacheRes.json();
+            retryAfter = body.error?.retryAfter ?? 60;
+          } catch {
+            // Server returned non-JSON 429 — use default retry time
+          }
           setError({
-            message: `Too many requests. Please wait ${body.error?.retryAfter ?? 60} seconds.`,
+            message: `Too many requests. Please wait ${retryAfter} seconds.`,
             isWarning: true,
           });
           setLoadState("idle");
@@ -91,13 +97,16 @@ export default function UrlInput({ onThreadLoaded, onError }: UrlInputProps) {
         }
 
         if (cacheRes.status === 400) {
-          const body = await cacheRes.json();
-          setError({
-            message: body.error?.message ?? "Invalid URL",
-            isWarning: false,
-          });
+          let message = "Invalid URL";
+          try {
+            const body = await cacheRes.json();
+            message = body.error?.message ?? "Invalid URL";
+          } catch {
+            // Server returned non-JSON 400 — use default message
+          }
+          setError({ message, isWarning: false });
           setLoadState("idle");
-          onError(body.error?.message ?? "Invalid URL");
+          onError(message);
           return;
         }
 
@@ -132,12 +141,19 @@ export default function UrlInput({ onThreadLoaded, onError }: UrlInputProps) {
         });
 
         if (!processRes.ok) {
-          const body = await processRes.json();
-          const msg = body.error?.message ?? "Failed to process thread";
+          let msg = "Failed to process thread";
+          let retryAfter = 60;
+          try {
+            const body = await processRes.json();
+            msg = body.error?.message ?? msg;
+            retryAfter = body.error?.retryAfter ?? 60;
+          } catch {
+            // Server returned non-JSON error — use defaults
+          }
 
           if (processRes.status === 429) {
             setError({
-              message: `Too many requests. Please wait ${body.error?.retryAfter ?? 60} seconds.`,
+              message: `Too many requests. Please wait ${retryAfter} seconds.`,
               isWarning: true,
             });
             setLoadState("idle");

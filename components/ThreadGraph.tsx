@@ -13,7 +13,6 @@ import {
   nodeRadius,
   drawNode,
   drawEdge,
-  sentimentColor,
 } from "../lib/graphUtils";
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -49,7 +48,15 @@ export default function ThreadGraph({
   const [transform] = useState<ZoomTransform>(() => zoomIdentity);
   const [isSimulating, setIsSimulating] = useState(false);
 
-  // ── Derive visible nodes from filter ────────────────────────────
+  // Store current props in refs so draw() always reads fresh values
+  const dataRef = useRef(data);
+  const filterRef = useRef(filter);
+  const selectedNodeIdRef = useRef(selectedNodeId);
+  dataRef.current = data;
+  filterRef.current = filter;
+  selectedNodeIdRef.current = selectedNodeId;
+
+  // ── Derive visible nodes from filter (for render logic) ─────────
 
   const visibleNodes = data
     ? data.nodes.filter(
@@ -65,32 +72,47 @@ export default function ThreadGraph({
       )
     : [];
 
-  const allScores = visibleNodes
-    .filter((n) => !n.scoreHidden)
-    .map((n) => n.score);
-
-  // ── Build SimulationNode lookup ─────────────────────────────────
-
-  const nodeById = new Map<string, SimulationNode>();
-  for (const node of visibleNodes) {
-    const pos = positionsRef.current[node.id];
-    nodeById.set(node.id, {
-      ...node,
-      x: pos?.x ?? 0,
-      y: pos?.y ?? 0,
-      vx: 0,
-      vy: 0,
-    });
-  }
-
-  // ── Canvas draw ─────────────────────────────────────────────────
+  // ── Canvas draw — reads all state from refs for freshness ───────
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) {
+      console.error("[ThreadGraph] Failed to acquire 2D canvas context");
+      return;
+    }
+
+    const curData = dataRef.current;
+    const curFilter = filterRef.current;
+    const curSelectedId = selectedNodeIdRef.current;
+    const positions = positionsRef.current;
+
+    if (!curData) return;
+
+    // Derive visible nodes/edges from current refs
+    const nodes = curData.nodes.filter(
+      (n) => n.depth <= curFilter.maxDepth && n.score >= curFilter.minScore
+    );
+    const nodeIdSet = new Set(nodes.map((n) => n.id));
+    const edges = curData.edges.filter(
+      (e) => nodeIdSet.has(e.source) && nodeIdSet.has(e.target)
+    );
+    const scores = nodes.filter((n) => !n.scoreHidden).map((n) => n.score);
+
+    // Build SimulationNode map with current positions
+    const nodeMap = new Map<string, SimulationNode>();
+    for (const node of nodes) {
+      const pos = positions[node.id];
+      nodeMap.set(node.id, {
+        ...node,
+        x: pos?.x ?? 0,
+        y: pos?.y ?? 0,
+        vx: 0,
+        vy: 0,
+      });
+    }
 
     const dpr = window.devicePixelRatio || 1;
     const width = canvas.clientWidth;
@@ -111,21 +133,21 @@ export default function ThreadGraph({
     ctx.translate(width / 2, height / 2);
 
     // Draw edges first (behind nodes)
-    for (const edge of visibleEdges) {
-      const source = nodeById.get(edge.source);
-      const target = nodeById.get(edge.target);
+    for (const edge of edges) {
+      const source = nodeMap.get(edge.source);
+      const target = nodeMap.get(edge.target);
       if (source && target) {
         drawEdge(ctx, source, target, transform);
       }
     }
 
     // Draw nodes
-    for (const [id, simNode] of nodeById) {
-      const radius = nodeRadius(simNode.score, simNode.scoreHidden, allScores);
+    for (const [id, simNode] of nodeMap) {
+      const radius = nodeRadius(simNode.score, simNode.scoreHidden, scores);
       drawNode(ctx, simNode, radius, transform);
 
       // Selection ring
-      if (id === selectedNodeId) {
+      if (id === curSelectedId) {
         const [sx, sy] = [simNode.x * transform.k, simNode.y * transform.k];
         const scaledRadius = radius * transform.k;
         ctx.beginPath();
@@ -143,7 +165,11 @@ export default function ThreadGraph({
     }
 
     ctx.restore();
-  }, [visibleEdges, nodeById, allScores, transform, selectedNodeId]);
+  }, [transform]);
+
+  // Store draw in a ref so Worker onmessage always calls the latest version
+  const drawRef = useRef(draw);
+  drawRef.current = draw;
 
   // ── Worker lifecycle ────────────────────────────────────────────
 
@@ -155,6 +181,14 @@ export default function ThreadGraph({
       new URL("../workers/forceLayout.worker.ts", import.meta.url)
     );
     workerRef.current = worker;
+
+    worker.onerror = (event: ErrorEvent) => {
+      console.error(
+        "[ThreadGraph] Worker failed:",
+        event.message
+      );
+      setIsSimulating(false);
+    };
 
     worker.onmessage = (event: MessageEvent<WorkerOutboundMessage>) => {
       const msg = event.data;
@@ -183,9 +217,9 @@ export default function ThreadGraph({
           setIsSimulating(false);
         }
 
-        // Request redraw
+        // Request redraw using ref to get latest draw function
         cancelAnimationFrame(animFrameRef.current);
-        animFrameRef.current = requestAnimationFrame(draw);
+        animFrameRef.current = requestAnimationFrame(() => drawRef.current());
       }
 
       if (msg.type === "ERROR") {
@@ -224,7 +258,7 @@ export default function ThreadGraph({
 
     // Redraw with current positions (filter may hide/show nodes)
     cancelAnimationFrame(animFrameRef.current);
-    animFrameRef.current = requestAnimationFrame(draw);
+    animFrameRef.current = requestAnimationFrame(() => drawRef.current());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter.maxDepth, filter.minScore]);
 
@@ -232,8 +266,8 @@ export default function ThreadGraph({
 
   useEffect(() => {
     cancelAnimationFrame(animFrameRef.current);
-    animFrameRef.current = requestAnimationFrame(draw);
-  }, [selectedNodeId, draw]);
+    animFrameRef.current = requestAnimationFrame(() => drawRef.current());
+  }, [selectedNodeId]);
 
   // ── Empty state ─────────────────────────────────────────────────
 
