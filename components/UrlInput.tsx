@@ -117,7 +117,7 @@ export default function UrlInput({ onThreadLoaded, onError }: UrlInputProps) {
 
         // Phase 2: Cache miss — fetch from Reddit (client-side)
         const cacheBody = await cacheRes.json();
-        const fetchUrl = cacheBody.data?.fetchUrl;
+        const fetchUrl = cacheBody.meta?.fetchUrl;
         if (!fetchUrl) throw new Error("No fetchUrl in cache miss response");
 
         const redditRes = await fetch(fetchUrl, {
