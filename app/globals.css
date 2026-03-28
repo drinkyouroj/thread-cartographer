@@ -310,3 +310,153 @@ body {
   font-style: italic;
   text-align: center;
 }
+
+/* ── ThreadGraph ───────────────────────────────────────────────── */
+
+.thread-graph {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background: var(--bg-canvas);
+}
+
+.thread-graph--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thread-graph__canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+}
+
+.thread-graph__canvas:active {
+  cursor: grabbing;
+}
+
+.thread-graph__placeholder {
+  color: var(--text-muted);
+  font-size: 15px;
+  text-align: center;
+  max-width: 320px;
+  line-height: 1.5;
+}
+
+.thread-graph__status {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+/* ── UrlInput ──────────────────────────────────────────────────── */
+
+.url-input {
+  padding: 16px 20px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-primary);
+  flex-shrink: 0;
+}
+
+.url-input__form {
+  display: flex;
+  gap: 10px;
+}
+
+.url-input__field {
+  flex: 1;
+  padding: 10px 14px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: var(--font-geist-mono);
+  outline: none;
+  transition: border-color 150ms;
+}
+
+.url-input__field::placeholder {
+  color: var(--text-muted);
+  font-family: var(--font-geist-sans);
+}
+
+.url-input__field:focus {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.url-input__field:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.url-input__button {
+  padding: 10px 20px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 150ms;
+}
+
+.url-input__button:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.url-input__button:focus-visible {
+  box-shadow: var(--focus-ring);
+  outline: none;
+}
+
+.url-input__button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.url-input__error {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--error);
+}
+
+.url-input__error--warning {
+  color: var(--warning);
+}
+
+.url-input__meta {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.url-input__meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.url-input__meta-label {
+  color: var(--text-muted);
+}
+
+.url-input__meta-value {
+  color: var(--text-primary);
+  font-weight: 500;
+}

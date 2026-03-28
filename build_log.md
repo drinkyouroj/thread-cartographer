@@ -238,3 +238,81 @@ tests/fixtures/         ✅ 6 Reddit JSON fixtures
 - components/ThreadGraph.tsx — Canvas rendering (Week 2 primary focus)
 - app/page.tsx — state orchestration, component composition
 - Client-side Reddit fetch hook
+
+---
+
+## 2026-03-28 — Week 2 Day 4: graphUtils + ThreadGraph + UrlInput
+
+### Done
+- `lib/graphUtils.ts`: Complete graph rendering utility library
+  - nodeRadius(): score-based sizing with scoreHidden → median radius
+  - sentimentColor(): color-blind-safe sentiment → color mapping
+  - screenToGraph()/graphToScreen(): zoom-aware coordinate transforms
+  - findNodeAtPoint(): quadtree-based hit-testing with zoom inversion
+  - drawNode(): Canvas circle with sentiment color, dashed border for stubs
+  - drawEdge(): Canvas line with highlight support
+- `components/ThreadGraph.tsx`: Canvas-based force graph renderer
+  - Worker integration: INIT on data load, FILTER on filter changes
+  - Float32Array + nodeIds position decoding
+  - Retina (devicePixelRatio) Canvas scaling
+  - Centered coordinate system with zoom transform support
+  - Selected node ring indicator
+  - Empty state and "no matches" state
+  - Simulation status indicator ("Laying out graph...")
+- `components/UrlInput.tsx`: Two-phase URL input
+  - Client-side validation (Reddit URL pattern, redd.it rejection)
+  - Phase 1: GET cache check, Phase 2: browser Reddit fetch, Phase 3: POST process
+  - Three loading states (idle/loading/loaded)
+  - Error display (red for errors, orange for rate limits)
+  - Post-load metadata bar (subreddit, comment count)
+  - AbortController for request cancellation
+- PR #4 review fixes (applied in prior session):
+  - Float32Array nodeIds mapping, stack traces in errors, onTick/onEnd try-catch
+  - 4 new tests (Float32Array, FILTER-before-INIT, focus trap Tab cycling)
+- 34 new graphUtils tests (nodeRadius, sentimentColor, coordinate transforms, hit-testing, drawNode, drawEdge)
+- Installed d3-zoom, d3-scale, d3-selection
+- Test count: 130 → 164
+
+### Git State
+- Branch: develop (PR #4 merged)
+- 164 tests passing, type-check clean, lint clean
+
+### What's Built So Far
+```
+lib/
+  types.ts              ✅ All core types (incl. nodeIds, stack on Worker msgs)
+  errors.ts             ✅ Error classes with HTTP status mapping
+  redis.ts              ✅ Singleton client with failure detection
+  cache.ts              ✅ Upstash 15-min TTL
+  rateLimiter.ts        ✅ Sliding window via @upstash/ratelimit
+  sentiment.ts          ✅ AFINN scoring with preprocessing
+  afinn.ts              ✅ AFINN-165 word list
+  sanitize.ts           ✅ sanitize-html with entity decoding
+  dataSource.ts         ✅ DataSource interface
+  redditParser.ts       ✅ Full Reddit JSON parser
+  redditJsonDataSource.ts ✅ DataSource impl
+  graphUtils.ts         ✅ Node sizing, hit-testing, transforms, Canvas draw
+app/
+  page.tsx              ❌ State orchestration (next)
+  layout.tsx            ✅ Dark mode, Geist fonts
+  globals.css           ✅ Theme + all component styles
+  api/health/route.ts   ✅ Redis status (auth-gated details)
+  api/thread/route.ts   ✅ Two-phase API
+components/
+  ControlPanel.tsx      ✅ Depth slider, score filter, legend
+  NodeDetail.tsx        ✅ Slide-out panel, focus trap
+  UrlInput.tsx          ✅ Two-phase fetch, validation, loading states
+  ThreadGraph.tsx       ✅ Canvas render + Worker integration
+workers/
+  forceLayout.worker.ts ✅ D3 force simulation + Float32Array + nodeIds
+styles/theme.css        ✅ Dark mode, color-blind-safe palette
+.github/workflows/ci.yml ✅ CI pipeline
+tests/                  ✅ 164 tests across 13 files
+tests/fixtures/         ✅ 6 Reddit JSON fixtures
+```
+
+### Next (Day 5)
+- app/page.tsx — state orchestration, compose all components
+- d3-zoom integration on ThreadGraph (pan/zoom with Canvas redraws)
+- Click-to-select node → open NodeDetail
+- Verify Reddit CORS from browser on preview deployment
