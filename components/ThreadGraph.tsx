@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useCallback, useState } from "react";
-import { zoom, zoomIdentity, type ZoomTransform } from "d3-zoom";
+import { zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from "d3-zoom";
 import { select } from "d3-selection";
 import type {
   CommentNode,
@@ -48,7 +48,9 @@ export default function ThreadGraph({
   const positionsRef = useRef<PositionMap>({});
   const animFrameRef = useRef<number>(0);
   const transformRef = useRef<ZoomTransform>(zoomIdentity);
+  const zoomBehaviorRef = useRef<ZoomBehavior<HTMLCanvasElement, unknown> | null>(null);
   const tooltipNodeIdRef = useRef<string | null>(null);
+  const hasAutoFittedRef = useRef<string | null>(null); // tracks threadId that was auto-fitted
   const [isSimulating, setIsSimulating] = useState(false);
   const [workerError, setWorkerError] = useState<string | null>(null);
   const [tooltipState, setTooltipState] = useState<{
@@ -209,9 +211,57 @@ export default function ThreadGraph({
     animFrameRef.current = requestAnimationFrame(() => drawRef.current());
   }
 
+  // ── Fit graph to viewport ───────────────────────────────────────
+  // Computes the bounding box of all positioned nodes and sets the
+  // zoom transform so the graph is centered with padding.
+
+  const fitGraphToViewport = useCallback(() => {
+    const canvas = canvasRef.current;
+    const zoomBehavior = zoomBehaviorRef.current;
+    if (!canvas || !zoomBehavior) return;
+
+    const positions = positionsRef.current;
+    const ids = Object.keys(positions);
+    if (ids.length === 0) return;
+
+    // Compute bounding box in graph coordinates
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    for (const id of ids) {
+      const p = positions[id];
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+
+    const graphWidth = maxX - minX;
+    const graphHeight = maxY - minY;
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    const canvasWidth = canvas.clientWidth;
+    const canvasHeight = canvas.clientHeight;
+    const padding = 60; // px padding around the graph
+
+    // Scale to fit with padding, but cap at 1x to avoid over-zooming small graphs
+    const scaleX = (canvasWidth - padding * 2) / Math.max(graphWidth, 1);
+    const scaleY = (canvasHeight - padding * 2) / Math.max(graphHeight, 1);
+    const scale = Math.min(scaleX, scaleY, 1);
+
+    // Translate so graph center maps to canvas center
+    const tx = canvasWidth / 2 - centerX * scale;
+    const ty = canvasHeight / 2 - centerY * scale;
+
+    const fitTransform = zoomIdentity.translate(tx, ty).scale(scale);
+
+    // Set transform directly (not animated) — this updates d3-zoom's internal
+    // state and fires the zoom event, which updates transformRef and redraws.
+    const sel = select(canvas);
+    sel.call(zoomBehavior.transform, fitTransform);
+  }, []);
+
   // ── d3-zoom integration ─────────────────────────────────────────
-  // Set initial transform to center the graph in the canvas.
-  // d3-zoom operates in top-left origin, so centering = translate(w/2, h/2).
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -229,6 +279,7 @@ export default function ThreadGraph({
         requestRedraw();
       });
 
+    zoomBehaviorRef.current = zoomBehavior;
     const sel = select(canvas);
     sel.call(zoomBehavior);
 
@@ -242,8 +293,11 @@ export default function ThreadGraph({
 
     return () => {
       sel.on(".zoom", null);
+      zoomBehaviorRef.current = null;
     };
-  }, []);
+    // Re-run when data presence changes — canvas only exists when data is non-null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!data]);
 
   // ── Click handler — hit-test and select node ────────────────────
 
@@ -276,7 +330,8 @@ export default function ThreadGraph({
 
     canvas.addEventListener("click", handleClick);
     return () => canvas.removeEventListener("click", handleClick);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!data]);
 
   // ── Hover handler — show tooltip on mousemove ───────────────────
   // Optimized: only calls setTooltipState when the hovered node changes
@@ -340,7 +395,8 @@ export default function ThreadGraph({
       canvas.removeEventListener("mousemove", handleMouseMove);
       canvas.removeEventListener("mouseleave", handleMouseLeave);
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!data]);
 
   // ── Worker lifecycle ────────────────────────────────────────────
 
@@ -390,6 +446,12 @@ export default function ThreadGraph({
 
         if (msg.type === "STABILIZED") {
           setIsSimulating(false);
+          // Auto-fit graph to viewport on first stabilization for this thread
+          const threadId = dataRef.current?.threadId;
+          if (threadId && hasAutoFittedRef.current !== threadId) {
+            hasAutoFittedRef.current = threadId;
+            fitGraphToViewport();
+          }
         }
 
         requestRedraw();
@@ -405,6 +467,7 @@ export default function ThreadGraph({
     // Send INIT with ALL nodes/edges — Worker simulates the full graph.
     // Visibility filtering is handled by FILTER messages and draw().
     setIsSimulating(true);
+    positionsRef.current = {}; // Clear stale positions from previous thread
     worker.postMessage({
       type: "INIT",
       nodes: data.nodes.map((n) => ({ id: n.id })),

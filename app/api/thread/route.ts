@@ -94,7 +94,9 @@ export async function GET(request: NextRequest) {
   if (commentDeepLink) {
     fetchPath = fetchPath.substring(0, commentDeepLink.index! + commentDeepLink[1].length);
   }
-  const fetchUrl = `${fetchPath}.json`;
+  // Reddit requires trailing slash before .json — without it, Reddit 301-redirects
+  // and the redirect response lacks CORS headers, causing browser fetch to fail.
+  const fetchUrl = `${fetchPath}/.json`;
 
   logRequest("cache_miss", { threadId, duration });
   return NextResponse.json(

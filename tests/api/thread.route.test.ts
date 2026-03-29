@@ -71,9 +71,10 @@ describe("GET /api/thread", () => {
       )
     );
     const data = await res.json();
-    // fetchUrl should strip comment ID but preserve slug (Reddit needs slug for CORS)
+    // fetchUrl should strip comment ID but preserve slug, with trailing slash before .json
+    // (Reddit 301-redirects without the slash, and the redirect lacks CORS headers)
     expect(data.meta.fetchUrl).toBe(
-      "https://www.reddit.com/r/test/comments/abc123/title.json"
+      "https://www.reddit.com/r/test/comments/abc123/title/.json"
     );
   });
 });
